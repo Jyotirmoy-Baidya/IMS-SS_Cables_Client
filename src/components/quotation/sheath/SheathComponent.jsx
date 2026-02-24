@@ -1,5 +1,35 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Layers, CheckCircle, AlertTriangle, Package } from 'lucide-react';
+
+const fmtN = (n, d = 3) => Number(n || 0).toFixed(d);
+const fmtCur = (n) => '₹' + Number(n || 0).toFixed(2);
+
+const StatBox = ({ label, value, accent }) => (
+    <div className={`rounded-lg px-3 py-2 ${accent ? 'bg-teal-50 border border-teal-100' : 'bg-gray-50 border border-gray-100'}`}>
+        <p className="text-xs text-gray-400 mb-0.5">{label}</p>
+        <p className={`text-sm font-bold ${accent ? 'text-teal-700' : 'text-gray-700'}`}>{value}</p>
+    </div>
+);
+
+const FieldLabel = ({ children }) => (
+    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{children}</label>
+);
+
+const InputField = ({ className = '', ...props }) => (
+    <input
+        {...props}
+        className={`w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-400 transition ${className}`}
+    />
+);
+
+const SelectField = ({ className = '', children, ...props }) => (
+    <select
+        {...props}
+        className={`w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-400 transition ${className}`}
+    >
+        {children}
+    </select>
+);
 
 const SheathComponent = ({
     sheathGroup,
@@ -65,7 +95,6 @@ const SheathComponent = ({
         const newCoreIds = currentCoreIds.includes(coreId)
             ? currentCoreIds.filter(id => id !== coreId)
             : [...currentCoreIds, coreId];
-
         handleUpdate('coreIds', newCoreIds);
     };
 
@@ -74,225 +103,283 @@ const SheathComponent = ({
         const newSheathIds = currentSheathIds.includes(sheathId)
             ? currentSheathIds.filter(id => id !== sheathId)
             : [...currentSheathIds, sheathId];
-
         handleUpdate('sheathIds', newSheathIds);
     };
 
-    // Get available cores and sheaths
     const availableCores = getAvailableCores(sheathGroup.id);
     const availableSheaths = getAvailableSheaths(sheathGroup.id);
-
-    // Calculate sheath
     const sheathCalc = calculateSheathForGroup(sheathGroup);
-
-    // Calculate outer area
     const outerArea = sheathCalc
         ? (Math.PI * sheathCalc.sheathOuterDiameter * sheathCalc.sheathOuterDiameter) / 4
         : 0;
 
+    const selectedCoreIds = sheathGroup.coreIds || [];
+    const selectedSheathIds = sheathGroup.sheathIds || [];
+    const hasSelection = selectedCoreIds.length > 0 || selectedSheathIds.length > 0;
+
     return (
-        <div className="bg-green-50 p-4 rounded-lg mb-4 border-2 border-green-200">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-semibold text-gray-700">Sheath Group {index + 1}</h3>
+        <div className="bg-white border-2 border-teal-200 rounded-xl overflow-hidden shadow-sm mb-4">
+
+            {/* ── Header ── */}
+            <div className="flex items-center justify-between px-5 py-3 bg-linear-to-r from-teal-700 to-teal-800">
+                <div className="flex items-center gap-2.5">
+                    <div className="bg-white/20 rounded-full w-7 h-7 flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">{index + 1}</span>
+                    </div>
+                    <h3 className="text-base font-bold text-white tracking-wide">Sheath Group {index + 1}</h3>
+                </div>
                 <button
                     onClick={() => onDelete(sheathGroup.id)}
-                    className="text-red-600 hover:text-red-800"
+                    className="p-1.5 rounded-lg text-red-300 hover:text-white hover:bg-red-600 transition-colors"
+                    title="Remove sheath group"
                 >
-                    <Trash2 size={20} />
+                    <Trash2 size={16} />
                 </button>
             </div>
 
-            {/* Core Selection with Checkboxes */}
-            <div className="bg-white p-3 rounded mb-4">
-                <h4 className="font-semibold mb-2">Select Cores</h4>
-                {availableCores.length > 0 ? (
-                    <div className="grid grid-cols-4 gap-3">
-                        {availableCores.map((core, idx) => (
-                            <label key={core.id} className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={(sheathGroup.coreIds || []).includes(core.id)}
-                                    onChange={() => toggleCore(core.id)}
-                                    className="w-4 h-4"
-                                />
-                                <span className="text-sm">
-                                    Core {cores.findIndex(c => c.id === core.id) + 1}
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-sm text-gray-500">No cores available (all cores are already used in other sheaths)</p>
-                )}
-            </div>
+            <div className="p-5 space-y-5">
 
-            {/* Sheath Selection with Checkboxes (Nested Sheaths) */}
-            <div className="bg-blue-50 p-3 rounded mb-4">
-                <h4 className="font-semibold mb-2">Select Other Sheaths (Nested Sheathing)</h4>
-                {availableSheaths.length > 0 ? (
-                    <div className="grid grid-cols-4 gap-3">
-                        {availableSheaths.map((sheath) => (
-                            <label key={sheath.id} className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={(sheathGroup.sheathIds || []).includes(sheath.id)}
-                                    onChange={() => toggleSheath(sheath.id)}
-                                    className="w-4 h-4"
-                                />
-                                <span className="text-sm">
-                                    Sheath {sheathGroups.findIndex(sg => sg.id === sheath.id) + 1}
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-sm text-gray-500">No sheaths available for nesting</p>
-                )}
-            </div>
-
-            {/* Selected Items Display */}
-            {((sheathGroup.coreIds && sheathGroup.coreIds.length > 0) || (sheathGroup.sheathIds && sheathGroup.sheathIds.length > 0)) && (
-                <div className="bg-yellow-50 p-2 rounded mb-4 text-sm">
-                    <strong>Contains:</strong>{' '}
-                    {(sheathGroup.coreIds || []).map((cid, idx) => (
-                        <span key={`core-${cid}`}>
-                            {idx > 0 && ', '}Core {cores.findIndex(c => c.id === cid) + 1}
-                        </span>
-                    ))}
-                    {(sheathGroup.coreIds || []).length > 0 && (sheathGroup.sheathIds || []).length > 0 && ', '}
-                    {(sheathGroup.sheathIds || []).map((sid, idx) => (
-                        <span key={`sheath-${sid}`}>
-                            {idx > 0 && ', '}Sheath {sheathGroups.findIndex(sg => sg.id === sid) + 1}
-                        </span>
-                    ))}
-                </div>
-            )}
-
-            {/* Sheath Configuration */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                {/* Fresh material */}
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-1">Fresh Sheath Material</label>
-                    <select
-                        value={sheathGroup.materialTypeId || ''}
-                        onChange={e => handleInsulationTypeSelect(e.target.value)}
-                        className="w-full p-2 border rounded"
-                    >
-                        <option value="">-- Select Fresh Material --</option>
-                        {(insulationTypes || []).map(type => (
-                            <option key={type._id} value={type._id}>
-                                {type.name} (ρ = {type.density} g/cm³)
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                {/* ── Section 1: Content Selection ── */}
                 <div>
-                    <label className="block text-sm font-medium mb-1">
-                        Fresh Price/kg (₹)
-                        {sheathGroup.freshPricePerKg > 0 && (
-                            <span className="ml-1 text-xs text-green-600 font-normal">from PO avg</span>
+                    <div className="flex items-center gap-2 mb-3">
+                        <Package size={15} className="text-teal-600" />
+                        <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Sheath Contents</span>
+                    </div>
+
+                    {/* Core Selection */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-3">
+                        <p className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-2">Select Cores</p>
+                        {availableCores.length > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {availableCores.map((core) => {
+                                    const coreNumber = cores.findIndex(c => c.id === core.id) + 1;
+                                    const isSelected = selectedCoreIds.includes(core.id);
+                                    return (
+                                        <label
+                                            key={core.id}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                                                isSelected
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'bg-white border border-blue-200 text-blue-800 hover:bg-blue-100'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => toggleCore(core.id)}
+                                                className="w-4 h-4 rounded"
+                                            />
+                                            <span className="text-sm font-medium">Core {coreNumber}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-blue-500 italic">All cores are used in other sheaths</p>
                         )}
-                    </label>
-                    <input
-                        type="number" step="0.01"
-                        value={sheathGroup.freshPricePerKg || ''}
-                        onChange={e => handleUpdate('freshPricePerKg', parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        className="w-full p-2 border rounded"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium mb-1">Fresh (%)</label>
-                    <input
-                        type="number"
-                        value={sheathGroup.freshPercent}
-                        onChange={(e) => handleUpdate('freshPercent', parseFloat(e.target.value))}
-                        className="w-full p-2 border rounded"
-                    />
-                </div>
-                {/* Reprocess material — can differ from fresh */}
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-1">
-                        Reprocess Material Type
-                        <span className="ml-1 text-xs text-gray-400 font-normal">(can be different from fresh)</span>
-                    </label>
-                    <select
-                        value={sheathGroup.reprocessMaterialTypeId || ''}
-                        onChange={e => handleReprocessTypeSelect(e.target.value)}
-                        className="w-full p-2 border rounded border-purple-200"
-                    >
-                        <option value="">-- Same as fresh / select reprocess type --</option>
-                        {(insulationTypes || []).map(type => (
-                            <option key={type._id} value={type._id}>
-                                {type.name} (ρ = {type.density} g/cm³)
-                            </option>
-                        ))}
-                    </select>
-                    {sheathGroup.reprocessMaterialTypeId && (
-                        <p className="text-xs text-purple-600 mt-1">
-                            Using: <strong>{sheathGroup.reprocessMaterialTypeName}</strong>
-                        </p>
+                    </div>
+
+                    {/* Nested Sheath Selection */}
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                        <p className="text-xs font-bold text-purple-800 uppercase tracking-wide mb-2">Nested Sheaths (Optional)</p>
+                        {availableSheaths.length > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {availableSheaths.map((sheath) => {
+                                    const sheathNumber = sheathGroups.findIndex(sg => sg.id === sheath.id) + 1;
+                                    const isSelected = selectedSheathIds.includes(sheath.id);
+                                    return (
+                                        <label
+                                            key={sheath.id}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                                                isSelected
+                                                    ? 'bg-purple-600 text-white'
+                                                    : 'bg-white border border-purple-200 text-purple-800 hover:bg-purple-100'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => toggleSheath(sheath.id)}
+                                                className="w-4 h-4 rounded"
+                                            />
+                                            <span className="text-sm font-medium">Sheath {sheathNumber}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-purple-500 italic">No sheaths available for nesting</p>
+                        )}
+                    </div>
+
+                    {/* Selected Items Summary */}
+                    {hasSelection && (
+                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                            <CheckCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                            <div className="text-xs text-amber-800">
+                                <strong className="font-semibold">Contains:</strong>{' '}
+                                {selectedCoreIds.map((cid, idx) => (
+                                    <span key={`core-${cid}`}>
+                                        {idx > 0 && ', '}Core {cores.findIndex(c => c.id === cid) + 1}
+                                    </span>
+                                ))}
+                                {selectedCoreIds.length > 0 && selectedSheathIds.length > 0 && ', '}
+                                {selectedSheathIds.map((sid, idx) => (
+                                    <span key={`sheath-${sid}`}>
+                                        {idx > 0 && ', '}Sheath {sheathGroups.findIndex(sg => sg.id === sid) + 1}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
-                <div>
-                    <label className="block text-sm font-medium mb-1">
-                        Reprocess Price/kg (₹)
-                        {sheathGroup.reprocessPricePerKg > 0 && (
-                            <span className="ml-1 text-xs text-purple-600 font-normal">from inventory</span>
-                        )}
-                    </label>
-                    <input
-                        type="number" step="0.01"
-                        value={sheathGroup.reprocessPricePerKg || ''}
-                        onChange={e => handleUpdate('reprocessPricePerKg', parseFloat(e.target.value) || 0)}
-                        placeholder="auto (70% fresh)"
-                        className="w-full p-2 border rounded"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium mb-1">Reprocess (%)</label>
-                    <input
-                        type="number"
-                        value={sheathGroup.reprocessPercent}
-                        onChange={(e) => handleUpdate('reprocessPercent', parseFloat(e.target.value))}
-                        className="w-full p-2 border rounded"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium mb-1">Thickness (mm)</label>
-                    <input
-                        type="number"
-                        step="0.1"
-                        value={sheathGroup.thickness}
-                        onChange={(e) => handleUpdate('thickness', parseFloat(e.target.value))}
-                        className="w-full p-2 border rounded"
-                    />
-                </div>
-            </div>
 
-            {/* Sheath Calculations */}
-            {sheathCalc ? (
-                <div className="bg-white p-3 rounded">
-                    <h4 className="font-semibold mb-2">Sheath Calculations</h4>
-                    <div className="grid grid-cols-4 gap-2 text-sm mb-2">
-                        <div>Total Inner Area: <strong>{sheathCalc.totalInnerArea} sq mm</strong></div>
-                        <div>Bundle Dia: <strong>{sheathCalc.bundleDiameter} mm</strong></div>
-                        <div>Outer Dia: <strong>{sheathCalc.sheathOuterDiameter} mm</strong></div>
-                        <div>Total Weight: <strong>{sheathCalc.totalWeight} kg</strong></div>
+                {/* ── Section 2: Material Configuration ── */}
+                <div className="border border-teal-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-teal-50">
+                        <Layers size={14} className="text-teal-600" />
+                        <span className="text-sm font-bold text-gray-700">Sheath Material</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-sm border-t pt-2">
-                        <div>Fresh Cost: <strong className="text-green-700">₹{sheathCalc.freshCost}</strong></div>
-                        <div>Reprocess Cost: <strong className="text-purple-700">₹{sheathCalc.reprocessCost}</strong></div>
-                        <div className="text-green-700 font-semibold">
-                            Outer Area: <strong>{outerArea.toFixed(2)} sq mm</strong>
+
+                    <div className="px-4 pt-3 pb-4 bg-white space-y-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {/* Fresh Type */}
+                            <div className="md:col-span-2">
+                                <FieldLabel>Fresh Material Type</FieldLabel>
+                                <SelectField
+                                    value={sheathGroup.materialTypeId || ''}
+                                    onChange={e => handleInsulationTypeSelect(e.target.value)}
+                                >
+                                    <option value="">— Select Fresh Material —</option>
+                                    {(insulationTypes || []).map(type => (
+                                        <option key={type._id} value={type._id}>
+                                            {type.name} (ρ = {type.density} g/cm³)
+                                        </option>
+                                    ))}
+                                </SelectField>
+                            </div>
+
+                            {/* Fresh Price */}
+                            <div>
+                                <FieldLabel>
+                                    Fresh Price/kg (₹)
+                                    {sheathGroup.freshPricePerKg > 0 && (
+                                        <span className="ml-1 text-emerald-500 normal-case font-normal">(PO avg)</span>
+                                    )}
+                                </FieldLabel>
+                                <InputField
+                                    type="number" step="0.01"
+                                    value={sheathGroup.freshPricePerKg || ''}
+                                    onChange={e => handleUpdate('freshPricePerKg', parseFloat(e.target.value) || 0)}
+                                    placeholder="0.00"
+                                />
+                            </div>
+
+                            {/* Fresh % */}
+                            <div>
+                                <FieldLabel>Fresh (%)</FieldLabel>
+                                <InputField
+                                    type="number"
+                                    value={sheathGroup.freshPercent}
+                                    onChange={e => handleUpdate('freshPercent', parseFloat(e.target.value))}
+                                />
+                            </div>
+
+                            {/* Reprocess Type */}
+                            <div className="md:col-span-2">
+                                <FieldLabel>
+                                    Reprocess Type
+                                    <span className="ml-1 text-gray-400 normal-case font-normal">(optional — can differ)</span>
+                                </FieldLabel>
+                                <SelectField
+                                    value={sheathGroup.reprocessMaterialTypeId || ''}
+                                    onChange={e => handleReprocessTypeSelect(e.target.value)}
+                                    className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
+                                >
+                                    <option value="">— Same as fresh / select reprocess type —</option>
+                                    {(insulationTypes || []).map(type => (
+                                        <option key={type._id} value={type._id}>
+                                            {type.name} (ρ = {type.density} g/cm³)
+                                        </option>
+                                    ))}
+                                </SelectField>
+                                {sheathGroup.reprocessMaterialTypeId && (
+                                    <p className="text-xs text-purple-600 mt-1">
+                                        Reprocess stock: <strong>{sheathGroup.reprocessMaterialTypeName}</strong>
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Reprocess Price */}
+                            <div>
+                                <FieldLabel>
+                                    Reprocess Price/kg (₹)
+                                    {sheathGroup.reprocessPricePerKg > 0 && (
+                                        <span className="ml-1 text-purple-500 normal-case font-normal">(inv)</span>
+                                    )}
+                                </FieldLabel>
+                                <InputField
+                                    type="number" step="0.01"
+                                    value={sheathGroup.reprocessPricePerKg || ''}
+                                    onChange={e => handleUpdate('reprocessPricePerKg', parseFloat(e.target.value) || 0)}
+                                    placeholder="auto (70% fresh)"
+                                    className="border-purple-200"
+                                />
+                            </div>
+
+                            {/* Reprocess % */}
+                            <div>
+                                <FieldLabel>Reprocess (%)</FieldLabel>
+                                <InputField
+                                    type="number"
+                                    value={sheathGroup.reprocessPercent}
+                                    onChange={e => handleUpdate('reprocessPercent', parseFloat(e.target.value))}
+                                    className="border-purple-200"
+                                />
+                            </div>
+
+                            {/* Thickness */}
+                            <div>
+                                <FieldLabel>Thickness (mm)</FieldLabel>
+                                <InputField
+                                    type="number" step="0.1"
+                                    value={sheathGroup.thickness}
+                                    onChange={e => handleUpdate('thickness', parseFloat(e.target.value))}
+                                />
+                            </div>
                         </div>
+
+                        {/* Sheath Results */}
+                        {sheathCalc ? (
+                            <div className="space-y-2 pt-2">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <StatBox label="Inner Area" value={`${sheathCalc.totalInnerArea} mm²`} />
+                                    <StatBox label="Bundle Dia" value={`${sheathCalc.bundleDiameter} mm`} />
+                                    <StatBox label="Sheath Outer Dia" value={`${sheathCalc.sheathOuterDiameter} mm`} accent />
+                                    <StatBox label="Total Weight" value={`${sheathCalc.totalWeight} kg`} />
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                    <StatBox label="Fresh Cost" value={fmtCur(sheathCalc.freshCost)} />
+                                    <StatBox label="Reprocess Cost" value={fmtCur(sheathCalc.reprocessCost)} />
+                                    <StatBox label="Sheath Total" value={fmtCur(sheathCalc.totalCost)} accent />
+                                </div>
+                                <div className="flex gap-2 pt-1 border-t border-gray-100">
+                                    <div className="flex-1 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                                        <p className="text-xs text-teal-500">Outer Area (After Sheath)</p>
+                                        <p className="text-sm font-bold text-teal-700">{fmtN(outerArea, 2)} mm²</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2.5 text-sm text-orange-700 mt-2">
+                                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                                <span>Select at least one core or sheath to calculate sheath dimensions</span>
+                            </div>
+                        )}
                     </div>
                 </div>
-            ) : (
-                <div className="bg-orange-100 border border-orange-300 p-3 rounded text-sm text-orange-800">
-                    ⚠️ Please select at least one core or sheath to calculate
-                </div>
-            )}
+
+            </div>
         </div>
     );
 };

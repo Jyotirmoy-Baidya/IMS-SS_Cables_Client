@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus, Search, Pencil, Trash2, FileText,
-    MapPin, Calendar, Truck, StickyNote, X, Check
+    MapPin, Calendar, Truck, StickyNote, X, Check, ClipboardCheck
 } from 'lucide-react';
 import api from '../api/axiosInstance';
+import ConvertToWorkOrderModal from '../components/quotation/ConvertToWorkOrderModal';
 
 const STATUS_CONFIG = {
     enquired: { label: 'Enquired',  bg: 'bg-blue-100',   text: 'text-blue-700'   },
@@ -36,6 +37,9 @@ const QuotationsPage = () => {
         notes: '',
     });
     const [savingNotes, setSavingNotes] = useState(false);
+
+    // Convert to work order modal state
+    const [convertModal, setConvertModal] = useState(null); // quotation to convert
 
     const fetchQuotations = async () => {
         try {
@@ -231,8 +235,17 @@ const QuotationsPage = () => {
                         ) : filtered.map(q => (
                             <tr key={q._id} className="hover:bg-gray-50 transition-colors">
                                 {/* Quote # */}
-                                <td className="px-4 py-3 font-mono text-xs font-semibold text-gray-700">
-                                    {q.quoteNumber}
+                                <td className="px-4 py-3">
+                                    <div className="font-mono text-xs font-semibold text-gray-700">
+                                        {q.quoteNumber}
+                                    </div>
+                                    {q.workOrderId && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">
+                                                WO: {q.workOrderId.workOrderNumber}
+                                            </span>
+                                        </div>
+                                    )}
                                 </td>
 
                                 {/* Customer */}
@@ -323,6 +336,20 @@ const QuotationsPage = () => {
                                         >
                                             <StickyNote size={15} />
                                         </button>
+                                        {q.status === 'approved' && (
+                                            <button
+                                                onClick={() => !q.workOrderId && setConvertModal(q)}
+                                                disabled={!!q.workOrderId}
+                                                className={`p-1.5 rounded-md ${
+                                                    q.workOrderId
+                                                        ? 'text-gray-300 cursor-not-allowed'
+                                                        : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                                }`}
+                                                title={q.workOrderId ? 'Already converted to work order' : 'Convert to Work Order'}
+                                            >
+                                                <ClipboardCheck size={15} />
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => navigate(`/quotation/edit/${q._id}`)}
                                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
@@ -503,6 +530,19 @@ const QuotationsPage = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ── Convert to Work Order Modal ── */}
+            {convertModal && (
+                <ConvertToWorkOrderModal
+                    quotation={convertModal}
+                    onClose={() => setConvertModal(null)}
+                    onSuccess={() => {
+                        setConvertModal(null);
+                        alert('Work order created successfully!');
+                        fetchQuotations();
+                    }}
+                />
             )}
         </div>
     );

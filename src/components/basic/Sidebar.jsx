@@ -1,6 +1,7 @@
 import {
     LayoutDashboard,
     Users,
+    UserCircle,
     FileText,
     ClipboardList,
     Truck,
@@ -63,6 +64,7 @@ const Sidebar = () => {
                         <SidebarSubItem label="Customers" to="/customers" />
                         <SidebarSubItem label="Quotations" to="/quotations" />
                         <SidebarSubItem label="Work Orders" to="/work-orders" />
+                        <SidebarSubItem label="Kanban Board" to="/work-orders/kanban" />
                     </SidebarGroup>
 
                     <SidebarGroup
@@ -81,7 +83,7 @@ const Sidebar = () => {
                         collapsed={collapsed}
                     >
                         <SidebarSubItem label="Raw Materials" to="/inventory/raw" />
-                        <SidebarSubItem label="WIP" to="/inventory/wip" />
+                        <SidebarSubItem label="WIP (Intermediate)" to="/inventory/wip" />
                         <SidebarSubItem label="Finished Goods" to="/inventory/finished" />
                     </SidebarGroup>
 
@@ -91,6 +93,15 @@ const Sidebar = () => {
                         collapsed={collapsed}
                     >
                         <SidebarSubItem label="Process Master" to="/process-master" />
+                        <SidebarSubItem label="Locations" to="/settings/locations" />
+                    </SidebarGroup>
+
+                    <SidebarGroup
+                        icon={<UserCircle size={18} />}
+                        label="Team"
+                        collapsed={collapsed}
+                    >
+                        <SidebarSubItem label="Users & Employees" to="/users" />
                     </SidebarGroup>
                 </ul>
             </nav>

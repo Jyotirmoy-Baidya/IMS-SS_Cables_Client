@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Save, ArrowLeft } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Zap, Layers, Ruler } from 'lucide-react';
 import CoreComponent from '../components/quotation/core/CoreComponent';
 import SheathComponent from '../components/quotation/sheath/SheathComponent';
 import QuotationSummary from '../components/quotation/summary/QuotationSummary';
@@ -94,7 +94,7 @@ const CreateQuotePage = () => {
             }
         };
         fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [quoteId]);
 
     const [cores, setCores] = useState([{
@@ -533,8 +533,8 @@ const CreateQuotePage = () => {
     };
 
     return (
-        <div className="w-full max-w-7xl mx-auto p-6 bg-gray-50">
-            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="w-full max-w-7xl mx-auto bg-gray-50">
+            <div className="mb-6">
                 {/* Page Header */}
                 <div className="flex items-start justify-between mb-6">
                     <div className="flex items-center gap-3">
@@ -610,31 +610,49 @@ const CreateQuotePage = () => {
                 </div>
 
                 {/* Shared Cable Length */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 mt-8">
-                    <div className="flex items-center gap-4">
-                        <label className="text-sm font-semibold text-blue-800 whitespace-nowrap">
-                            Cable Length (m) — applies to all cores:
-                        </label>
-                        <input
-                            type="number"
-                            value={cableLength}
-                            onChange={e => setCableLength(parseFloat(e.target.value) || 0)}
-                            min="1"
-                            step="1"
-                            className="w-32 p-2 border rounded-md font-semibold"
-                        />
-                        <span className="text-sm text-blue-600">meters</span>
+                <div className="bg-linear-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-5 mb-8 mt-8">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-600 text-white p-2.5 rounded-lg">
+                                <Ruler size={18} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-blue-900">
+                                    Cable Length
+                                </label>
+                                <p className="text-xs text-blue-600 mt-0.5">Applies to all cores in this quotation</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="number"
+                                value={cableLength}
+                                onChange={e => setCableLength(parseFloat(e.target.value) || 0)}
+                                min="1"
+                                step="1"
+                                className="w-28 px-4 py-2.5 text-lg font-bold text-blue-900 text-right border-2 border-blue-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-500"
+                            />
+                            <span className="text-sm font-semibold text-blue-700">meters</span>
+                        </div>
                     </div>
                 </div>
 
                 {/* Core Configuration Section */}
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-semibold text-gray-700">Core Configuration</h2>
+                <div className="bg-linear-to-r from-slate-50 to-slate-100 border-l-4 border-blue-600 rounded-lg p-4 mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-blue-600 text-white p-2 rounded-lg">
+                            <Zap size={18} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-800">Core Configuration</h2>
+                            <p className="text-xs text-gray-500 mt-0.5">Configure conductor cores and insulation</p>
+                        </div>
+                    </div>
                     <button
                         onClick={addCore}
-                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                     >
-                        <Plus size={20} /> Add Core
+                        <Plus size={16} /> Add Core
                     </button>
                 </div>
 
@@ -654,13 +672,21 @@ const CreateQuotePage = () => {
                 ))}
 
                 {/* Sheath Configuration Section */}
-                <div className="flex justify-between items-center mb-4 mt-8">
-                    <h2 className="text-2xl font-semibold text-gray-700">Outer Sheath Configuration</h2>
+                <div className="bg-linear-to-r from-teal-50 to-teal-100 border-l-4 border-teal-600 rounded-lg p-4 mb-4 mt-8 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-teal-600 text-white p-2 rounded-lg">
+                            <Layers size={18} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-800">Outer Sheath Configuration</h2>
+                            <p className="text-xs text-gray-500 mt-0.5">Add protective sheath layers around cores</p>
+                        </div>
+                    </div>
                     <button
                         onClick={addSheathGroup}
-                        className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                        className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors shadow-sm"
                     >
-                        <Plus size={20} /> Add Sheath Group
+                        <Plus size={16} /> Add Sheath Group
                     </button>
                 </div>
 
