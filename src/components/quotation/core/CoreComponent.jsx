@@ -78,6 +78,8 @@ const CoreComponent = ({
                 ...core.insulation,
                 materialTypeId: null,
                 materialTypeName: '',
+                materialId: null,
+                material: null,
                 density: 1.4,
                 freshPricePerKg: 0,
                 reprocessPricePerKg: 0
@@ -94,6 +96,13 @@ const CoreComponent = ({
             ...core.insulation,
             materialTypeId: typeId,
             materialTypeName: type.name,
+            materialId: matchingMat?._id || null,
+            material: matchingMat ? {
+                _id: matchingMat._id,
+                name: matchingMat.name,
+                category: matchingMat.category,
+                specifications: matchingMat.specifications
+            } : null,
             density: type.density || 1.4,
             freshPricePerKg: matchingMat?.inventory?.avgPricePerKg || 0,
             reprocessPricePerKg: matchingMat?.reprocessInventory?.pricePerKg || 0
@@ -106,6 +115,8 @@ const CoreComponent = ({
                 ...core.insulation,
                 reprocessMaterialTypeId: null,
                 reprocessMaterialTypeName: '',
+                reprocessMaterialId: null,
+                reprocessMaterial: null,
                 reprocessDensity: null,
                 reprocessPricePerKg: 0
             });
@@ -121,6 +132,13 @@ const CoreComponent = ({
             ...core.insulation,
             reprocessMaterialTypeId: typeId,
             reprocessMaterialTypeName: type.name,
+            reprocessMaterialId: matchingMat?._id || null,
+            reprocessMaterial: matchingMat ? {
+                _id: matchingMat._id,
+                name: matchingMat.name,
+                category: matchingMat.category,
+                specifications: matchingMat.specifications
+            } : null,
             reprocessDensity: type.density || null,
             reprocessPricePerKg: matchingMat?.reprocessInventory?.pricePerKg || 0
         });
@@ -159,7 +177,7 @@ const CoreComponent = ({
     const selectedTypeName = metalTypes.find(t => t._id === core.materialTypeId)?.name || null;
 
     return (
-        <div className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm mb-4">
+        <div id={`core-${core.id}`} className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm mb-4">
 
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-5 py-3 bg-linear-to-r from-slate-700 to-slate-800">

@@ -7,6 +7,12 @@ import SuppliersPage from './pages/SuppliersPage'
 import RawMaterialsPage from './pages/RawMaterialsPage'
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
 import ProcessMasterPage from './pages/ProcessMasterPage'
+import UsersPage from './pages/UsersPage'
+import WorkOrdersPage from './pages/WorkOrdersPage'
+import WorkOrderDetailPage from './pages/WorkOrderDetailPage'
+import WorkOrderKanbanPage from './pages/WorkOrderKanbanPage'
+import WIPInventoryPage from './pages/WIPInventoryPage'
+import LocationsPage from './pages/LocationsPage'
 
 const App = () => {
   return (
@@ -26,8 +32,14 @@ const App = () => {
           <Route path='customers' element={<CustomerPage />} />
           <Route path='suppliers' element={<SuppliersPage />} />
           <Route path='inventory/raw' element={<RawMaterialsPage />} />
+          <Route path='inventory/wip' element={<WIPInventoryPage />} />
           <Route path='purchase-orders' element={<PurchaseOrdersPage />} />
           <Route path='process-master' element={<ProcessMasterPage />} />
+          <Route path='users' element={<UsersPage />} />
+          <Route path='work-orders' element={<WorkOrdersPage />} />
+          <Route path='work-orders/kanban' element={<WorkOrderKanbanPage />} />
+          <Route path='work-order/:id' element={<WorkOrderDetailPage />} />
+          <Route path='settings/locations' element={<LocationsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

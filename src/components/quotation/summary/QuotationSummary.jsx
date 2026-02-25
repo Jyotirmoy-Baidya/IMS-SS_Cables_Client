@@ -88,7 +88,7 @@ const QuotationSummary = ({ totals, quoteProcesses = [], profitMarginPercent = 0
     const finalPrice = grandTotal + profitAmount;
 
     return (
-        <div className="bg-white border-2 border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div id="quotation-summary" className="bg-white border-2 border-gray-200 rounded-xl shadow-sm overflow-hidden">
 
             {/* ── Header ── */}
             <div className="bg-linear-to-r from-blue-700 to-blue-800 px-6 py-4">
