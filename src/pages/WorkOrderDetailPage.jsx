@@ -377,6 +377,79 @@ const WorkOrderDetailPage = () => {
                 </div>
             </div>
 
+            {/* Allocated Materials Section */}
+            {workOrder.allocatedMaterials && workOrder.allocatedMaterials.length > 0 && (
+                <div className="mt-6 bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="px-6 py-4 border-b bg-gray-50">
+                        <h2 className="text-lg font-bold text-gray-800">Allocated Materials</h2>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            Materials reserved for this work order
+                        </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Material</th>
+                                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lot Number</th>
+                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Allocated Weight</th>
+                                    <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Allocated Date</th>
+                                    <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {workOrder.allocatedMaterials.map((allocated, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50">
+                                        <td className="px-6 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <Package size={14} className="text-gray-400" />
+                                                <span className="font-medium text-gray-800">
+                                                    {allocated.materialName || 'Unknown Material'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <span className="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded font-mono">
+                                                {allocated.lotNumber || 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-3 text-right">
+                                            <span className="font-semibold text-gray-800">
+                                                {allocated.allocatedWeight?.toFixed(2) || '0.00'} kg
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-3 text-center text-gray-600">
+                                            <div className="flex items-center justify-center gap-1">
+                                                <Calendar size={12} className="text-gray-400" />
+                                                <span className="text-xs">
+                                                    {allocated.allocatedAt
+                                                        ? new Date(allocated.allocatedAt).toLocaleDateString('en-IN')
+                                                        : 'N/A'
+                                                    }
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-center">
+                                            {allocated.isConsumed ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded-full font-medium">
+                                                    <CheckCircle2 size={12} />
+                                                    Consumed
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-amber-100 text-amber-700 rounded-full font-medium">
+                                                    <Clock size={12} />
+                                                    Allocated
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             {/* Notes Section */}
             {workOrder.notes && (
                 <div className="mt-6 bg-white border border-gray-200 rounded-xl p-4">

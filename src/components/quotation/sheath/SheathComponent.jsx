@@ -52,6 +52,8 @@ const SheathComponent = ({
         if (!typeId) {
             handleUpdate('materialTypeId', null);
             handleUpdate('material', '');
+            handleUpdate('materialId', null);
+            handleUpdate('materialObject', null);
             handleUpdate('density', 1.4);
             handleUpdate('freshPricePerKg', 0);
             handleUpdate('reprocessPricePerKg', 0);
@@ -65,6 +67,13 @@ const SheathComponent = ({
         });
         handleUpdate('materialTypeId', typeId);
         handleUpdate('material', type.name);
+        handleUpdate('materialId', matchingMat?._id || null);
+        handleUpdate('materialObject', matchingMat ? {
+            _id: matchingMat._id,
+            name: matchingMat.name,
+            category: matchingMat.category,
+            specifications: matchingMat.specifications
+        } : null);
         handleUpdate('density', type.density || 1.4);
         handleUpdate('freshPricePerKg', matchingMat?.inventory?.avgPricePerKg || 0);
         handleUpdate('reprocessPricePerKg', matchingMat?.reprocessInventory?.pricePerKg || 0);
@@ -74,6 +83,8 @@ const SheathComponent = ({
         if (!typeId) {
             handleUpdate('reprocessMaterialTypeId', null);
             handleUpdate('reprocessMaterialTypeName', '');
+            handleUpdate('reprocessMaterialId', null);
+            handleUpdate('reprocessMaterialObject', null);
             handleUpdate('reprocessDensity', null);
             handleUpdate('reprocessPricePerKg', 0);
             return;
@@ -86,6 +97,13 @@ const SheathComponent = ({
         });
         handleUpdate('reprocessMaterialTypeId', typeId);
         handleUpdate('reprocessMaterialTypeName', type.name);
+        handleUpdate('reprocessMaterialId', matchingMat?._id || null);
+        handleUpdate('reprocessMaterialObject', matchingMat ? {
+            _id: matchingMat._id,
+            name: matchingMat.name,
+            category: matchingMat.category,
+            specifications: matchingMat.specifications
+        } : null);
         handleUpdate('reprocessDensity', type.density || null);
         handleUpdate('reprocessPricePerKg', matchingMat?.reprocessInventory?.pricePerKg || 0);
     };
@@ -118,7 +136,7 @@ const SheathComponent = ({
     const hasSelection = selectedCoreIds.length > 0 || selectedSheathIds.length > 0;
 
     return (
-        <div className="bg-white border-2 border-teal-200 rounded-xl overflow-hidden shadow-sm mb-4">
+        <div id={`sheath-${sheathGroup.id}`} className="bg-white border-2 border-teal-200 rounded-xl overflow-hidden shadow-sm mb-4">
 
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-5 py-3 bg-linear-to-r from-teal-700 to-teal-800">

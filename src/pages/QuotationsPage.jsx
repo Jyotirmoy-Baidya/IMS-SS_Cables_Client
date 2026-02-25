@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axiosInstance';
 import ConvertToWorkOrderModal from '../components/quotation/ConvertToWorkOrderModal';
+import MaterialPreFlightModal from '../components/workOrder/MaterialPreFlightModal';
 
 const STATUS_CONFIG = {
     enquired: { label: 'Enquired',  bg: 'bg-blue-100',   text: 'text-blue-700'   },
@@ -39,6 +40,7 @@ const QuotationsPage = () => {
     const [savingNotes, setSavingNotes] = useState(false);
 
     // Convert to work order modal state
+    const [preflightModal, setPreflightModal] = useState(null); // quotation for preflight check
     const [convertModal, setConvertModal] = useState(null); // quotation to convert
 
     const fetchQuotations = async () => {
@@ -338,7 +340,7 @@ const QuotationsPage = () => {
                                         </button>
                                         {q.status === 'approved' && (
                                             <button
-                                                onClick={() => !q.workOrderId && setConvertModal(q)}
+                                                onClick={() => !q.workOrderId && setPreflightModal(q)}
                                                 disabled={!!q.workOrderId}
                                                 className={`p-1.5 rounded-md ${
                                                     q.workOrderId
@@ -530,6 +532,18 @@ const QuotationsPage = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ── Material Preflight Check Modal ── */}
+            {preflightModal && (
+                <MaterialPreFlightModal
+                    quotation={preflightModal}
+                    onClose={() => setPreflightModal(null)}
+                    onProceed={() => {
+                        setConvertModal(preflightModal);
+                        setPreflightModal(null);
+                    }}
+                />
             )}
 
             {/* ── Convert to Work Order Modal ── */}

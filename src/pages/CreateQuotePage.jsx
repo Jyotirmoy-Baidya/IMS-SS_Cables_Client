@@ -426,7 +426,8 @@ const CreateQuotePage = () => {
                 const rodPrice = core.selectedRod?.inventory?.avgPricePerKg || 0;
                 const conductorCost = materialWeight * rodPrice;
                 totalCost += conductorCost;
-                const metalName = metalTypes.find(t => t._id === core.materialTypeId)?.name || 'Metal';
+                // Use actual material name (rod name), not material type name
+                const metalName = core.selectedRod.name || metalTypes.find(t => t._id === core.materialTypeId)?.name || 'Metal';
                 details.push({
                     type: 'conductor',
                     coreIndex: idx,
@@ -452,8 +453,13 @@ const CreateQuotePage = () => {
             );
             totalCost += insulationCalc.totalCost;
 
-            const insulName = core.insulation.materialTypeName ||
+            // Use actual material name from the material object, fallback to type name
+            const insulName = core.insulation.material?.name ||
+                core.insulation.materialTypeName ||
                 insulationTypes.find(t => t._id === core.insulation.materialTypeId)?.name || '';
+            const reprocessName = core.insulation.reprocessMaterial?.name ||
+                core.insulation.reprocessMaterialTypeName ||
+                insulName;
             if (insulName) {
                 details.push({
                     type: 'insulation',
@@ -462,7 +468,7 @@ const CreateQuotePage = () => {
                     name: insulName,
                     freshWeight: insulationCalc.freshWeight,
                     reprocessWeight: insulationCalc.reprocessWeight,
-                    reprocessName: core.insulation.reprocessMaterialTypeName || insulName,
+                    reprocessName: reprocessName,
                     cost: insulationCalc.totalCost
                 });
             }
@@ -472,8 +478,13 @@ const CreateQuotePage = () => {
             const sheathCalc = calculateSheathForGroup(sg);
             if (sheathCalc) {
                 totalCost += sheathCalc.totalCost;
-                const sheathName = insulationTypes.find(t => t._id === sg.materialTypeId)?.name ||
-                    sg.material || '';
+                // Use actual material name from the material object, fallback to type name
+                const sheathName = sg.materialObject?.name ||
+                    sg.material ||
+                    insulationTypes.find(t => t._id === sg.materialTypeId)?.name || '';
+                const reprocessName = sg.reprocessMaterialObject?.name ||
+                    sg.reprocessMaterialTypeName ||
+                    sheathName;
                 if (sheathName) {
                     details.push({
                         type: 'sheath',
@@ -482,7 +493,7 @@ const CreateQuotePage = () => {
                         name: sheathName,
                         freshWeight: sheathCalc.freshWeight,
                         reprocessWeight: sheathCalc.reprocessWeight,
-                        reprocessName: sg.reprocessMaterialTypeName || sheathName,
+                        reprocessName: reprocessName,
                         cost: sheathCalc.totalCost
                     });
                 }
@@ -493,6 +504,144 @@ const CreateQuotePage = () => {
     };
 
     const totals = calculateTotals();
+
+    // Calculate required materials for stock checking
+    const calculateRequiredMaterials = () => {
+        const requiredMaterials = [];
+
+        cores.forEach((core) => {
+            // Conductor material
+            if (core.selectedRod?._id) {
+                const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
+                const drawingLength = calculateDrawingLength(core.wireCount, cableLength);
+                const conductorWeight = calculateMaterialWeight(
+                    wireDimensions.areaPerWire,
+                    drawingLength,
+                    core.materialDensity || 8.96,
+                    core.wastagePercent
+                );
+
+                requiredMaterials.push({
+                    materialId: core.selectedRod._id,
+                    materialName: core.selectedRod.name,
+                    category: 'metal',
+                    requiredWeight: parseFloat(conductorWeight.toFixed(4)),
+                    purpose: 'conductor'
+                });
+            }
+
+            // Insulation - fresh
+            if (core.insulation?.materialId && core.insulation?.freshPercent > 0) {
+                const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
+                const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
+                const insulationCalc = calculateInsulation(
+                    coreDiameter,
+                    core.insulation.thickness,
+                    cableLength,
+                    'custom',
+                    core.insulation.freshPercent,
+                    0,
+                    core.insulation.freshPricePerKg || 0,
+                    null,
+                    core.insulation.density || 1.4,
+                    null
+                );
+
+                if (insulationCalc.freshWeight > 0) {
+                    requiredMaterials.push({
+                        materialId: core.insulation.materialId,
+                        materialName: core.insulation.material?.name || core.insulation.materialTypeName,
+                        category: 'insulation',
+                        requiredWeight: parseFloat(insulationCalc.freshWeight.toFixed(4)),
+                        purpose: 'insulation-fresh'
+                    });
+                }
+            }
+
+            // Insulation - reprocess
+            if (core.insulation?.reprocessPercent > 0) {
+                const reprocessMaterialId = core.insulation.reprocessMaterialId || core.insulation.materialId;
+                const reprocessMaterialName = core.insulation.reprocessMaterial?.name ||
+                    core.insulation.reprocessMaterialTypeName ||
+                    core.insulation.material?.name;
+
+                const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
+                const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
+                const insulationCalc = calculateInsulation(
+                    coreDiameter,
+                    core.insulation.thickness,
+                    cableLength,
+                    'custom',
+                    0,
+                    core.insulation.reprocessPercent,
+                    0,
+                    core.insulation.reprocessPricePerKg,
+                    core.insulation.reprocessDensity || core.insulation.density || 1.4,
+                    core.insulation.reprocessDensity || core.insulation.density || 1.4
+                );
+
+                if (insulationCalc.reprocessWeight > 0 && reprocessMaterialId) {
+                    requiredMaterials.push({
+                        materialId: reprocessMaterialId,
+                        materialName: reprocessMaterialName,
+                        category: 'insulation',
+                        requiredWeight: parseFloat(insulationCalc.reprocessWeight.toFixed(4)),
+                        purpose: 'insulation-reprocess'
+                    });
+                }
+            }
+        });
+
+        // Sheaths
+        sheathGroups.forEach((sg) => {
+            const sheathCalc = calculateSheathForGroup(sg);
+            if (sheathCalc) {
+                // Fresh sheath
+                if (sg.materialId && sg.freshPercent > 0 && sheathCalc.freshWeight > 0) {
+                    requiredMaterials.push({
+                        materialId: sg.materialId,
+                        materialName: sg.materialObject?.name || sg.material,
+                        category: 'plastic',
+                        requiredWeight: parseFloat(sheathCalc.freshWeight.toFixed(4)),
+                        purpose: 'sheath-fresh'
+                    });
+                }
+
+                // Reprocess sheath
+                if (sg.reprocessPercent > 0 && sheathCalc.reprocessWeight > 0) {
+                    const reprocessMaterialId = sg.reprocessMaterialId || sg.materialId;
+                    const reprocessMaterialName = sg.reprocessMaterialObject?.name ||
+                        sg.reprocessMaterialTypeName ||
+                        sg.material;
+
+                    if (reprocessMaterialId) {
+                        requiredMaterials.push({
+                            materialId: reprocessMaterialId,
+                            materialName: reprocessMaterialName,
+                            category: 'plastic',
+                            requiredWeight: parseFloat(sheathCalc.reprocessWeight.toFixed(4)),
+                            purpose: 'sheath-reprocess'
+                        });
+                    }
+                }
+            }
+        });
+
+        // Aggregate by materialId
+        const aggregated = {};
+        requiredMaterials.forEach(mat => {
+            if (aggregated[mat.materialId]) {
+                aggregated[mat.materialId].requiredWeight += mat.requiredWeight;
+            } else {
+                aggregated[mat.materialId] = { ...mat };
+            }
+        });
+
+        return Object.values(aggregated).map(mat => ({
+            ...mat,
+            requiredWeight: parseFloat(mat.requiredWeight.toFixed(4))
+        }));
+    };
 
     const handleSave = async (statusOverride) => {
         setSaving(true);
@@ -517,6 +666,7 @@ const CreateQuotePage = () => {
                 profitAmount,
                 finalPrice,
                 status: statusOverride || 'enquired',
+                requiredMaterialsQuantity: calculateRequiredMaterials(),
             };
 
             if (quoteId) {
@@ -532,8 +682,51 @@ const CreateQuotePage = () => {
         }
     };
 
+    // Scroll to section helper
+    const scrollToSection = (sectionId) => {
+        const element = document.getElementById(sectionId);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
     return (
-        <div className="w-full max-w-7xl mx-auto bg-gray-50">
+        <div className="w-full max-w-7xl mx-auto bg-gray-50 relative">
+            {/* Fixed Scroll Tracker Sidebar */}
+            <div className="fixed right-4 top-1/2 -translate-y-1/2 z-10 hidden xl:block">
+                <div className="bg-white border-2 border-gray-200 rounded-xl shadow-lg p-3 w-20">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3 px-2">
+                        Sections
+                    </p>
+                    <div className="space-y-1">
+                        {cores.map((core, idx) => (
+                            <button
+                                key={core.id}
+                                onClick={() => scrollToSection(`core-${core.id}`)}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors font-medium"
+                            >
+                                C {idx + 1}
+                            </button>
+                        ))}
+                        {sheathGroups.map((sg, idx) => (
+                            <button
+                                key={sg.id}
+                                onClick={() => scrollToSection(`sheath-${sg.id}`)}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 rounded-lg transition-colors font-medium"
+                            >
+                                Sheath {idx + 1}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => scrollToSection('quotation-summary')}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-lg transition-colors font-medium"
+                        >
+                            Summary
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div className="mb-6">
                 {/* Page Header */}
                 <div className="flex items-start justify-between mb-6">
