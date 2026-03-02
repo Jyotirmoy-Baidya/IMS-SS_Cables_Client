@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, User, MapPin, Clock, CheckCircle2, ChevronDown, ChevronUp,
-    Calendar, Package, AlertCircle
+    Calendar, Package, AlertCircle, Activity, TrendingUp, Plus, ExternalLink
 } from 'lucide-react';
 import api from '../api/axiosInstance';
+import AddInputModal from '../components/processTracking/AddInputModal';
+import AddOutputModal from '../components/processTracking/AddOutputModal';
 
 const STATUS_CONFIG = {
     pending: { label: 'Pending', bg: 'bg-amber-100', text: 'text-amber-700' },
@@ -19,6 +21,12 @@ const WorkOrderDetailPage = () => {
     const [loading, setLoading] = useState(true);
     const [expandedProcess, setExpandedProcess] = useState(null);
     const [updating, setUpdating] = useState(false);
+
+    // Process tracking state
+    const [processTrackings, setProcessTrackings] = useState({});
+    const [selectedProcessTracking, setSelectedProcessTracking] = useState(null);
+    const [showAddInput, setShowAddInput] = useState(false);
+    const [showAddOutput, setShowAddOutput] = useState(false);
 
     // Process update form
     const [processForm, setProcessForm] = useState({
@@ -35,6 +43,19 @@ const WorkOrderDetailPage = () => {
             setLoading(true);
             const res = await api.get(`/work-order/get-work-order/${id}`);
             setWorkOrder(res.data || null);
+
+            // Fetch process tracking for all processes
+            if (res.data?.processAssignments?.length > 0) {
+                const trackingRes = await api.get(`/process-tracking?workOrderId=${id}`);
+                const trackings = trackingRes.data || [];
+
+                // Map trackings by processAssignmentId
+                const trackingMap = {};
+                trackings.forEach(tracking => {
+                    trackingMap[tracking.processAssignmentId] = tracking;
+                });
+                setProcessTrackings(trackingMap);
+            }
         } catch (err) {
             console.error('Failed to fetch work order:', err);
             alert('Failed to load work order: ' + err.message);
@@ -61,6 +82,51 @@ const WorkOrderDetailPage = () => {
                 notes: processAssignment.notes || '',
             });
         }
+    };
+
+    const handleCreateProcessTracking = async (processAssignment) => {
+        try {
+            await api.post('/process-tracking', {
+                workOrderId: workOrder._id,
+                processAssignmentId: processAssignment._id
+            });
+            alert('Process tracking created successfully!');
+            fetchWorkOrder();
+        } catch (err) {
+            alert('Failed to create process tracking: ' + err.message);
+        }
+    };
+
+    const handleOpenInputModal = (processAssignment) => {
+        const tracking = processTrackings[processAssignment._id];
+        if (!tracking) {
+            alert('Please create process tracking first');
+            return;
+        }
+        setSelectedProcessTracking(tracking);
+        setShowAddInput(true);
+    };
+
+    const handleOpenOutputModal = (processAssignment) => {
+        const tracking = processTrackings[processAssignment._id];
+        if (!tracking) {
+            alert('Please create process tracking first');
+            return;
+        }
+        setSelectedProcessTracking(tracking);
+        setShowAddOutput(true);
+    };
+
+    const handleInputAdded = () => {
+        setShowAddInput(false);
+        setSelectedProcessTracking(null);
+        fetchWorkOrder();
+    };
+
+    const handleOutputAdded = () => {
+        setShowAddOutput(false);
+        setSelectedProcessTracking(null);
+        fetchWorkOrder();
     };
 
     const handleUpdateProcess = async (processAssignmentId) => {
@@ -96,6 +162,16 @@ const WorkOrderDetailPage = () => {
                 processAssignments: updatedAssignments,
                 status: woStatus,
             });
+
+            // Also update process tracking if exists
+            const tracking = processTrackings[processAssignmentId];
+            if (tracking) {
+                await api.patch(`/process-tracking/${tracking._id}/progress`, {
+                    progressPercentage: processForm.progressPercentage,
+                    status: processForm.status,
+                    userId: null // You can add user context here
+                });
+            }
 
             alert('Process updated successfully!');
             fetchWorkOrder();
@@ -337,6 +413,117 @@ const WorkOrderDetailPage = () => {
                                         </div>
                                     </div>
 
+                                    {/* Process Tracking Section */}
+                                    {(() => {
+                                        const tracking = processTrackings[pa._id];
+                                        return (
+                                            <div className="mt-6 border-t border-gray-200 pt-4">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                                        <Activity size={16} className="text-purple-600" />
+                                                        Process Tracking & Materials
+                                                    </h3>
+                                                    {!tracking && (
+                                                        <button
+                                                            onClick={() => handleCreateProcessTracking(pa)}
+                                                            className="px-3 py-1.5 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1"
+                                                        >
+                                                            <Plus size={14} />
+                                                            Enable Tracking
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {tracking ? (
+                                                    <div className="space-y-3">
+                                                        {/* Tracking Stats */}
+                                                        <div className="grid grid-cols-3 gap-3">
+                                                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center">
+                                                                <p className="text-xs text-blue-600 font-medium">Inputs</p>
+                                                                <p className="text-xl font-bold text-blue-700">{tracking.inputs?.length || 0}</p>
+                                                            </div>
+                                                            <div className="bg-green-50 border border-green-100 rounded-lg p-3 text-center">
+                                                                <p className="text-xs text-green-600 font-medium">Outputs</p>
+                                                                <p className="text-xl font-bold text-green-700">{tracking.outputs?.length || 0}</p>
+                                                            </div>
+                                                            <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 text-center">
+                                                                <p className="text-xs text-purple-600 font-medium">Logs</p>
+                                                                <p className="text-xl font-bold text-purple-700">{tracking.logs?.length || 0}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Action Buttons */}
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => handleOpenInputModal(pa)}
+                                                                className="flex-1 px-3 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                                                            >
+                                                                <Plus size={14} />
+                                                                Add Input (Consume Material)
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleOpenOutputModal(pa)}
+                                                                className="flex-1 px-3 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                                                            >
+                                                                <TrendingUp size={14} />
+                                                                Add Output (Produce)
+                                                            </button>
+                                                            <button
+                                                                onClick={() => navigate(`/process-tracking/${tracking._id}`)}
+                                                                className="px-3 py-2 text-sm font-semibold bg-gray-700 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2"
+                                                            >
+                                                                <ExternalLink size={14} />
+                                                                View Details
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Recent Activity Summary */}
+                                                        {tracking.inputs && tracking.inputs.length > 0 && (
+                                                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                                                                <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Recent Inputs</p>
+                                                                <div className="space-y-1">
+                                                                    {tracking.inputs.slice(-2).map((input, idx) => (
+                                                                        <div key={idx} className="text-xs text-blue-800">
+                                                                            • {input.sourceType === 'raw-material' ? input.materialName : input.wipItemName}
+                                                                            {' - '}
+                                                                            <span className="font-bold">
+                                                                                {input.quantityUsed?.weight || input.quantityUsed?.length || 0} {input.quantityUsed?.unit}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {tracking.outputs && tracking.outputs.length > 0 && (
+                                                            <div className="bg-green-50 border border-green-100 rounded-lg p-3">
+                                                                <p className="text-xs font-semibold text-green-700 uppercase mb-2">Recent Outputs</p>
+                                                                <div className="space-y-1">
+                                                                    {tracking.outputs.slice(-2).map((output, idx) => (
+                                                                        <div key={idx} className="text-xs text-green-800">
+                                                                            • {output.itemName}
+                                                                            {' - '}
+                                                                            <span className="font-bold">
+                                                                                {output.quantity?.weight || output.quantity?.length || 0} {output.quantity?.unit}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                                                        <AlertCircle size={24} className="mx-auto text-gray-400 mb-2" />
+                                                        <p className="text-sm text-gray-600">
+                                                            Process tracking not enabled. Enable it to track inputs, outputs, and activity logs.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+
                                     {/* Update Button */}
                                     <div className="mt-4 flex justify-end gap-2">
                                         <button
@@ -456,6 +643,29 @@ const WorkOrderDetailPage = () => {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Work Order Notes</p>
                     <p className="text-sm text-gray-700">{workOrder.notes}</p>
                 </div>
+            )}
+
+            {/* Modals */}
+            {showAddInput && selectedProcessTracking && (
+                <AddInputModal
+                    tracking={selectedProcessTracking}
+                    onClose={() => {
+                        setShowAddInput(false);
+                        setSelectedProcessTracking(null);
+                    }}
+                    onSuccess={handleInputAdded}
+                />
+            )}
+
+            {showAddOutput && selectedProcessTracking && (
+                <AddOutputModal
+                    tracking={selectedProcessTracking}
+                    onClose={() => {
+                        setShowAddOutput(false);
+                        setSelectedProcessTracking(null);
+                    }}
+                    onSuccess={handleOutputAdded}
+                />
             )}
         </div>
     );

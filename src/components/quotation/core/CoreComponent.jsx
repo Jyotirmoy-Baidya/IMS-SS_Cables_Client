@@ -196,7 +196,7 @@ const CoreComponent = ({
                 </button>
             </div>
 
-            <div className="p-5 space-y-5">
+            <div className="p-5 space-y-5 border-l-2">
 
                 {/* ── Section 1: Conductor Configuration ── */}
                 <div>
@@ -345,11 +345,10 @@ const CoreComponent = ({
                                         <button
                                             key={rod._id}
                                             onClick={() => handleRodSelect(rod)}
-                                            className={`p-2.5 border-2 rounded-lg text-left text-sm transition-colors ${
-                                                core.selectedRod?._id === rod._id
+                                            className={`p-2.5 border-2 rounded-lg text-left text-sm transition-colors ${core.selectedRod?._id === rod._id
                                                     ? 'bg-blue-50 border-blue-500'
                                                     : 'bg-white border-gray-200 hover:border-amber-300 hover:bg-amber-50'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="font-semibold text-gray-800">{rod.name}</div>
                                             {rod.specifications?.dimensions && (

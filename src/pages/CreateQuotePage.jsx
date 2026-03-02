@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Save, ArrowLeft, Zap, Layers, Ruler } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Zap, Layers, Ruler, Eye, EyeOff } from 'lucide-react';
 import CoreComponent from '../components/quotation/core/CoreComponent';
 import SheathComponent from '../components/quotation/sheath/SheathComponent';
 import QuotationSummary from '../components/quotation/summary/QuotationSummary';
@@ -682,6 +682,47 @@ const CreateQuotePage = () => {
         }
     };
 
+    // Active section tracking
+    const [activeSection, setActiveSection] = useState('');
+    const [showHorizontalProgress, setShowHorizontalProgress] = useState(false);
+    const [showScrollGuide, setShowScrollGuide] = useState(true);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            const sections = [
+                ...cores.map(c => `core-${c.id}`),
+                ...sheathGroups.map(sg => `sheath-${sg.id}`),
+                'quotation-summary'
+            ];
+
+            for (const sectionId of sections) {
+                const element = document.getElementById(sectionId);
+                if (element) {
+                    const rect = element.getBoundingClientRect();
+                    if (rect.top >= 0 && rect.top <= window.innerHeight / 2) {
+                        setActiveSection(sectionId);
+                        break;
+                    }
+                }
+            }
+
+            // Check if first core has crossed center of screen
+            if (cores.length > 0) {
+                const firstCore = document.getElementById(`core-${cores[0].id}`);
+                if (firstCore) {
+                    const rect = firstCore.getBoundingClientRect();
+                    // Show horizontal progress when first core crosses center (going up)
+                    setShowHorizontalProgress(rect.top < window.innerHeight / 2);
+                }
+            }
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        handleScroll();
+
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [cores, sheathGroups]);
+
     // Scroll to section helper
     const scrollToSection = (sectionId) => {
         const element = document.getElementById(sectionId);
@@ -692,40 +733,63 @@ const CreateQuotePage = () => {
 
     return (
         <div className="w-full max-w-7xl mx-auto bg-gray-50 relative">
-            {/* Fixed Scroll Tracker Sidebar */}
-            <div className="fixed right-4 top-1/2 -translate-y-1/2 z-10 hidden xl:block">
-                <div className="bg-white border-2 border-gray-200 rounded-xl shadow-lg p-3 w-20">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3 px-2">
-                        Sections
-                    </p>
-                    <div className="space-y-1">
-                        {cores.map((core, idx) => (
-                            <button
-                                key={core.id}
-                                onClick={() => scrollToSection(`core-${core.id}`)}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition-colors font-medium"
-                            >
-                                C {idx + 1}
-                            </button>
-                        ))}
-                        {sheathGroups.map((sg, idx) => (
-                            <button
-                                key={sg.id}
-                                onClick={() => scrollToSection(`sheath-${sg.id}`)}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-700 rounded-lg transition-colors font-medium"
-                            >
-                                Sheath {idx + 1}
-                            </button>
-                        ))}
+            {/* Horizontal Progress Bar - Appears after first core crosses center */}
+            <div className={`fixed top-0 left-0 right-0 z-20 bg-white border-b border-gray-200 shadow-md transition-all duration-300 ${showHorizontalProgress ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
+                }`}>
+                <div className="max-w-7xl mx-auto px-4 py-2">
+                    <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
+                        {cores.map((core, idx) => {
+                            const sectionId = `core-${core.id}`;
+                            const isActive = activeSection === sectionId;
+                            return (
+                                <button
+                                    key={core.id}
+                                    onClick={() => scrollToSection(sectionId)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${isActive
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-gray-400'
+                                        }`}></div>
+                                    Core {idx + 1}
+                                </button>
+                            );
+                        })}
+                        {sheathGroups.map((sg, idx) => {
+                            const sectionId = `sheath-${sg.id}`;
+                            const isActive = activeSection === sectionId;
+                            return (
+                                <button
+                                    key={sg.id}
+                                    onClick={() => scrollToSection(sectionId)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${isActive
+                                        ? 'bg-teal-600 text-white shadow-sm'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-gray-400'
+                                        }`}></div>
+                                    Sheath {idx + 1}
+                                </button>
+                            );
+                        })}
                         <button
                             onClick={() => scrollToSection('quotation-summary')}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-lg transition-colors font-medium"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${activeSection === 'quotation-summary'
+                                ? 'bg-purple-600 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
                         >
+                            <div className={`w-1.5 h-1.5 rounded-full ${activeSection === 'quotation-summary' ? 'bg-white' : 'bg-gray-400'
+                                }`}></div>
                             Summary
                         </button>
                     </div>
                 </div>
             </div>
+
+
 
             <div className="mb-6">
                 {/* Page Header */}
@@ -747,6 +811,13 @@ const CreateQuotePage = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            onClick={() => setShowScrollGuide(!showScrollGuide)}
+                            className="hidden xl:flex items-center gap-2 px-3 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                            title={showScrollGuide ? 'Hide scroll guide' : 'Show scroll guide'}
+                        >
+                            {showScrollGuide ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
                         <button
                             onClick={() => handleSave('enquired')}
                             disabled={saving}
