@@ -12,6 +12,7 @@ import WorkOrdersPage from './pages/WorkOrdersPage'
 import WorkOrderDetailPage from './pages/WorkOrderDetailPage'
 import WorkOrderKanbanPage from './pages/WorkOrderKanbanPage'
 import WIPInventoryPage from './pages/WIPInventoryPage'
+import FinishedGoodsPage from './pages/FinishedGoodsPage'
 import LocationsPage from './pages/LocationsPage'
 import EmployeeLoginPage from './pages/EmployeeLoginPage'
 import EmployeeDashboardPage from './pages/EmployeeDashboardPage'
@@ -35,6 +36,7 @@ const App = () => {
           <Route path='suppliers' element={<SuppliersPage />} />
           <Route path='inventory/raw' element={<RawMaterialsPage />} />
           <Route path='inventory/wip' element={<WIPInventoryPage />} />
+          <Route path='inventory/finished' element={<FinishedGoodsPage />} />
           <Route path='purchase-orders' element={<PurchaseOrdersPage />} />
           <Route path='process-master' element={<ProcessMasterPage />} />
           <Route path='users' element={<UsersPage />} />
