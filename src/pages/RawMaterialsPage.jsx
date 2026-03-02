@@ -233,31 +233,28 @@ const RawMaterialsPage = () => {
           <div className="flex">
             <button
               onClick={() => setActiveTab('types')}
-              className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-                activeTab === 'types'
+              className={`px-6 py-3 font-medium border-b-2 transition-colors ${activeTab === 'types'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Material Types ({materialTypes.length})
             </button>
             <button
               onClick={() => setActiveTab('inventory')}
-              className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-                activeTab === 'inventory'
+              className={`px-6 py-3 font-medium border-b-2 transition-colors ${activeTab === 'inventory'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Inventory ({materials.length})
             </button>
             <button
               onClick={() => setActiveTab('reprocessed')}
-              className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-                activeTab === 'reprocessed'
+              className={`px-6 py-3 font-medium border-b-2 transition-colors ${activeTab === 'reprocessed'
                   ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
+                }`}
             >
               Reprocessed Items ({materials.filter(m => (m.reprocessInventory?.totalWeight || 0) > 0).length})
             </button>
@@ -318,12 +315,11 @@ const RawMaterialsPage = () => {
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              type.category === 'metal' ? 'bg-gray-100 text-gray-800' :
-                              type.category === 'plastic' ? 'bg-blue-100 text-blue-800' :
-                              type.category === 'insulation' ? 'bg-purple-100 text-purple-800' :
-                              'bg-green-100 text-green-800'
-                            }`}>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${type.category === 'metal' ? 'bg-gray-100 text-gray-800' :
+                                type.category === 'plastic' ? 'bg-blue-100 text-blue-800' :
+                                  type.category === 'insulation' ? 'bg-purple-100 text-purple-800' :
+                                    'bg-green-100 text-green-800'
+                              }`}>
                               {type.category}
                             </span>
                           </td>
@@ -380,14 +376,16 @@ const RawMaterialsPage = () => {
                 </button>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
+                  <thead className="bg-gray-50 border-b sticky top-0">
                     <tr>
                       <th className="text-left px-6 py-3 text-sm font-semibold text-gray-700">Code</th>
                       <th className="text-left px-6 py-3 text-sm font-semibold text-gray-700">Material</th>
                       <th className="text-left px-6 py-3 text-sm font-semibold text-gray-700">Category</th>
                       <th className="text-right px-6 py-3 text-sm font-semibold text-gray-700">Stock (kg)</th>
+                      <th className="text-right px-6 py-3 text-sm font-semibold text-amber-700">Allocated (kg)</th>
+                      <th className="text-right px-6 py-3 text-sm font-semibold text-green-700">Available (kg)</th>
                       <th className="text-right px-6 py-3 text-sm font-semibold text-gray-700">Avg Price/kg</th>
                       <th className="text-right px-6 py-3 text-sm font-semibold text-gray-700">Last Price/kg</th>
                       <th className="text-right px-6 py-3 text-sm font-semibold text-purple-700">Reprocess (kg)</th>
@@ -400,13 +398,17 @@ const RawMaterialsPage = () => {
                   <tbody className="divide-y">
                     {filteredMaterials.length === 0 ? (
                       <tr>
-                        <td colSpan="11" className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan="13" className="px-6 py-8 text-center text-gray-500">
                           No materials in inventory. Click "Add Raw Material" to create one.
                         </td>
                       </tr>
                     ) : (
                       filteredMaterials.map((material) => {
-                        const isLowStock = material.inventory.totalWeight < material.reorderLevel;
+                        const totalStock = material.inventory?.totalWeight || 0;
+                        // allocatedWeight is calculated from active work orders in the backend
+                        const allocatedStock = material.inventory?.allocatedWeight || 0;
+                        const availableStock = material.inventory?.availableWeight || (totalStock - allocatedStock);
+                        const isLowStock = availableStock < material.reorderLevel;
                         return (
                           <tr key={material._id} className={`hover:bg-gray-50 ${isLowStock ? 'bg-orange-50' : ''}`}>
                             <td className="px-6 py-4 text-sm font-mono">{material.materialCode}</td>
@@ -417,16 +419,21 @@ const RawMaterialsPage = () => {
                               )}
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                material.category === 'metal' ? 'bg-gray-100 text-gray-800' :
-                                material.category === 'plastic' ? 'bg-blue-100 text-blue-800' :
-                                'bg-purple-100 text-purple-800'
-                              }`}>
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${material.category === 'metal' ? 'bg-gray-100 text-gray-800' :
+                                  material.category === 'plastic' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-purple-100 text-purple-800'
+                                }`}>
                                 {material.category}
                               </span>
                             </td>
                             <td className="px-6 py-4 text-right font-medium">
-                              {material.inventory?.totalWeight?.toFixed(2) || '0.00'}
+                              {totalStock.toFixed(2)}
+                            </td>
+                            <td className="px-6 py-4 text-right font-medium text-amber-700">
+                              {allocatedStock.toFixed(2)}
+                            </td>
+                            <td className="px-6 py-4 text-right font-medium text-green-700">
+                              {availableStock.toFixed(2)}
                               {isLowStock && (
                                 <span className="ml-2 text-orange-500">⚠</span>
                               )}
@@ -563,12 +570,11 @@ const RawMaterialsPage = () => {
                               )}
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                material.category === 'metal' ? 'bg-gray-100 text-gray-800' :
-                                material.category === 'plastic' ? 'bg-blue-100 text-blue-800' :
-                                material.category === 'insulation' ? 'bg-purple-100 text-purple-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${material.category === 'metal' ? 'bg-gray-100 text-gray-800' :
+                                  material.category === 'plastic' ? 'bg-blue-100 text-blue-800' :
+                                    material.category === 'insulation' ? 'bg-purple-100 text-purple-800' :
+                                      'bg-green-100 text-green-800'
+                                }`}>
                                 {material.category}
                               </span>
                             </td>
@@ -732,57 +738,71 @@ const RawMaterialsPage = () => {
               </div>
 
               {/* Lots Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0">
                     <tr>
                       <th className="text-left px-4 py-3 text-sm font-semibold">Lot Number</th>
                       <th className="text-left px-4 py-3 text-sm font-semibold">Supplier</th>
                       <th className="text-left px-4 py-3 text-sm font-semibold">Date</th>
                       <th className="text-right px-4 py-3 text-sm font-semibold">Initial (kg)</th>
-                      <th className="text-right px-4 py-3 text-sm font-semibold">Remaining (kg)</th>
+                      <th className="text-right px-4 py-3 text-sm font-semibold text-amber-700">Allocated (kg)</th>
+                      <th className="text-right px-4 py-3 text-sm font-semibold text-red-700">Consumed (kg)</th>
+                      <th className="text-right px-4 py-3 text-sm font-semibold text-green-700">Available (kg)</th>
                       <th className="text-right px-4 py-3 text-sm font-semibold">Price/kg</th>
                       <th className="text-left px-4 py-3 text-sm font-semibold">Storage</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {lots.map((lot, index) => (
-                      <tr key={lot._id} className={index === 0 ? 'bg-green-50' : 'hover:bg-gray-50'}>
-                        <td className="px-4 py-3 text-sm font-mono">
-                          {lot.lotNumber}
-                          {index === 0 && (
-                            <span className="ml-2 text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">
-                              Will be consumed first
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {lot.supplierId?.supplierName || 'N/A'}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {new Date(lot.purchaseDate).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          {lot.initialQuantity?.weight?.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right font-medium">
-                          {lot.remainingQuantity?.weight?.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          ₹{lot.pricing?.pricePerKg?.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className="inline-flex items-center gap-1">
-                            {lot.storage?.location}
-                            {lot.storage?.containerCount > 0 && (
-                              <span className="text-xs text-gray-500">
-                                ({lot.storage.containerCount})
+                    {lots.map((lot, index) => {
+                      const initial = lot.initialQuantity?.weight || 0;
+                      const allocated = lot.allocatedQuantity?.weight || 0;
+                      const consumed = lot.consumedQuantity?.weight || 0;
+                      const available = initial - allocated - consumed;
+                      return (
+                        <tr key={lot._id} className={index === 0 ? 'bg-green-50' : 'hover:bg-gray-50'}>
+                          <td className="px-4 py-3 text-sm font-mono">
+                            {lot.lotNumber}
+                            {index === 0 && (
+                              <span className="ml-2 text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">
+                                Will be consumed first
                               </span>
                             )}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {lot.supplierId?.supplierName || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {new Date(lot.purchaseDate).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right">
+                            {initial.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-medium text-amber-700">
+                            {allocated.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-medium text-red-700">
+                            {consumed.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold text-green-700">
+                            {available.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right">
+                            ₹{lot.pricing?.pricePerKg?.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="inline-flex items-center gap-1">
+                              {lot.storage?.location}
+                              {lot.storage?.containerCount > 0 && (
+                                <span className="text-xs text-gray-500">
+                                  ({lot.storage.containerCount})
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

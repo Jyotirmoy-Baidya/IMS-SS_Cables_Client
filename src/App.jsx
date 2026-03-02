@@ -13,6 +13,8 @@ import WorkOrderDetailPage from './pages/WorkOrderDetailPage'
 import WorkOrderKanbanPage from './pages/WorkOrderKanbanPage'
 import WIPInventoryPage from './pages/WIPInventoryPage'
 import LocationsPage from './pages/LocationsPage'
+import EmployeeLoginPage from './pages/EmployeeLoginPage'
+import EmployeeDashboardPage from './pages/EmployeeDashboardPage'
 
 const App = () => {
   return (
@@ -40,7 +42,12 @@ const App = () => {
           <Route path='work-orders/kanban' element={<WorkOrderKanbanPage />} />
           <Route path='work-order/:id' element={<WorkOrderDetailPage />} />
           <Route path='settings/locations' element={<LocationsPage />} />
+
+
+
         </Route>
+        <Route path="/employee/login" element={<EmployeeLoginPage />} />
+        <Route path="/employee/:employeeId/dashboard" element={<EmployeeDashboardPage />} />
       </Routes>
     </BrowserRouter>
   )
