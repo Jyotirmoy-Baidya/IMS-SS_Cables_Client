@@ -7,6 +7,9 @@ import {
 import api from '../api/axiosInstance';
 import AddInputModal from '../components/processTracking/AddInputModal';
 import AddOutputModal from '../components/processTracking/AddOutputModal';
+import UpdateProgressModal from '../components/processTracking/UpdateProgressModal';
+import SubmitReportModal from '../components/processTracking/SubmitReportModal';
+import ProcessStatusBanner from '../components/processTracking/ProcessStatusBanner';
 
 const STATUS_CONFIG = {
     pending: { label: 'Pending', bg: 'bg-amber-100', text: 'text-amber-700' },
@@ -27,6 +30,12 @@ const WorkOrderDetailPage = () => {
     const [selectedProcessTracking, setSelectedProcessTracking] = useState(null);
     const [showAddInput, setShowAddInput] = useState(false);
     const [showAddOutput, setShowAddOutput] = useState(false);
+    const [showUpdateProgress, setShowUpdateProgress] = useState(false);
+
+    // Report and dependency state
+    const [processDependencies, setProcessDependencies] = useState({});
+    const [showSubmitReport, setShowSubmitReport] = useState(false);
+    const [reportProcessTracking, setReportProcessTracking] = useState(null);
 
     // Process update form
     const [processForm, setProcessForm] = useState({
@@ -64,9 +73,33 @@ const WorkOrderDetailPage = () => {
         }
     };
 
+    const checkProcessDependency = async (processAssignment) => {
+        try {
+            const response = await api.post('/process-tracking/check-dependencies', {
+                workOrderId: workOrder?._id,
+                processSequence: processAssignment.sequence
+            });
+
+            setProcessDependencies(prev => ({
+                ...prev,
+                [processAssignment._id]: response.data
+            }));
+        } catch (error) {
+            console.error('Error checking dependencies:', error);
+        }
+    };
+
     useEffect(() => {
         fetchWorkOrder();
     }, [id]);
+
+    useEffect(() => {
+        if (workOrder && workOrder.processAssignments) {
+            workOrder.processAssignments.forEach(pa => {
+                checkProcessDependency(pa);
+            });
+        }
+    }, [workOrder]);
 
     const handleExpandProcess = (processAssignment) => {
         if (expandedProcess?._id === processAssignment._id) {
@@ -125,6 +158,22 @@ const WorkOrderDetailPage = () => {
 
     const handleOutputAdded = () => {
         setShowAddOutput(false);
+        setSelectedProcessTracking(null);
+        fetchWorkOrder();
+    };
+
+    const handleOpenUpdateProgressModal = (processAssignment) => {
+        const tracking = processTrackings[processAssignment._id];
+        if (!tracking) {
+            alert('Please create process tracking first');
+            return;
+        }
+        setSelectedProcessTracking(tracking);
+        setShowUpdateProgress(true);
+    };
+
+    const handleProgressUpdated = () => {
+        setShowUpdateProgress(false);
         setSelectedProcessTracking(null);
         fetchWorkOrder();
     };
@@ -319,41 +368,27 @@ const WorkOrderDetailPage = () => {
                                 </div>
                             </div>
 
+                            {/* Process Dependency Status Banner */}
+                            {processDependencies[pa._id] && (
+                                <div className="px-6 pt-4">
+                                    <ProcessStatusBanner
+                                        dependencyStatus={processDependencies[pa._id]}
+                                        processName={pa.processName}
+                                        onSubmitReport={() => {
+                                            const tracking = processTrackings[pa._id];
+                                            if (tracking && tracking.status === 'completed' && !tracking.reportUploaded) {
+                                                setReportProcessTracking(tracking);
+                                                setShowSubmitReport(true);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            )}
+
                             {/* Expanded Process Details */}
                             {expandedProcess?._id === pa._id && (
                                 <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
                                     <div className="grid grid-cols-2 gap-4">
-                                        {/* Status */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                                Status
-                                            </label>
-                                            <select
-                                                value={processForm.status}
-                                                onChange={e => setProcessForm(prev => ({ ...prev, status: e.target.value }))}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                            >
-                                                <option value="pending">Pending</option>
-                                                <option value="in-progress">In Progress</option>
-                                                <option value="completed">Completed</option>
-                                            </select>
-                                        </div>
-
-                                        {/* Progress Percentage */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                                Progress %
-                                            </label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                value={processForm.progressPercentage}
-                                                onChange={e => setProcessForm(prev => ({ ...prev, progressPercentage: Number(e.target.value) }))}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                            />
-                                        </div>
-
                                         {/* Produced Quantity */}
                                         <div>
                                             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
@@ -452,18 +487,69 @@ const WorkOrderDetailPage = () => {
                                                             </div>
                                                         </div>
 
+                                                        {/* Report Submission Banner */}
+                                                        {tracking.status === 'completed' && !tracking.reportUploaded && (
+                                                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <AlertCircle size={20} className="text-yellow-600 flex-shrink-0" />
+                                                                        <div>
+                                                                            <p className="text-sm font-semibold text-yellow-800">Process Completed - Report Required</p>
+                                                                            <p className="text-xs text-yellow-700 mt-0.5">Please submit a process report before the next process can begin</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setReportProcessTracking(tracking);
+                                                                            setShowSubmitReport(true);
+                                                                        }}
+                                                                        className="px-4 py-2 bg-yellow-600 text-white text-sm font-semibold rounded-lg hover:bg-yellow-700 flex-shrink-0"
+                                                                    >
+                                                                        Submit Report
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Report Submitted Status */}
+                                                        {tracking.status === 'completed' && tracking.reportUploaded && (
+                                                            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <CheckCircle2 size={16} className="text-green-600" />
+                                                                    <p className="text-sm font-semibold text-green-800">Report Submitted</p>
+                                                                    {tracking.reportUrl && (
+                                                                        <a
+                                                                            href={tracking.reportUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="text-xs text-green-600 hover:underline ml-auto"
+                                                                        >
+                                                                            View Report →
+                                                                        </a>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
                                                         {/* Action Buttons */}
-                                                        <div className="flex gap-2">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <button
+                                                                onClick={() => handleOpenUpdateProgressModal(pa)}
+                                                                className="px-3 py-2 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center gap-2"
+                                                            >
+                                                                <Activity size={14} />
+                                                                Update Status & Progress
+                                                            </button>
                                                             <button
                                                                 onClick={() => handleOpenInputModal(pa)}
-                                                                className="flex-1 px-3 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                                                                className="px-3 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
                                                             >
                                                                 <Plus size={14} />
-                                                                Add Input (Consume Material)
+                                                                Add Input (Consume)
                                                             </button>
                                                             <button
                                                                 onClick={() => handleOpenOutputModal(pa)}
-                                                                className="flex-1 px-3 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                                                                className="px-3 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
                                                             >
                                                                 <TrendingUp size={14} />
                                                                 Add Output (Produce)
@@ -665,6 +751,32 @@ const WorkOrderDetailPage = () => {
                         setSelectedProcessTracking(null);
                     }}
                     onSuccess={handleOutputAdded}
+                />
+            )}
+
+            {showUpdateProgress && selectedProcessTracking && (
+                <UpdateProgressModal
+                    tracking={selectedProcessTracking}
+                    onClose={() => {
+                        setShowUpdateProgress(false);
+                        setSelectedProcessTracking(null);
+                    }}
+                    onSuccess={handleProgressUpdated}
+                />
+            )}
+
+            {showSubmitReport && reportProcessTracking && (
+                <SubmitReportModal
+                    tracking={reportProcessTracking}
+                    onClose={() => {
+                        setShowSubmitReport(false);
+                        setReportProcessTracking(null);
+                    }}
+                    onSuccess={() => {
+                        setShowSubmitReport(false);
+                        setReportProcessTracking(null);
+                        fetchWorkOrder(); // Refresh to update dependency status
+                    }}
                 />
             )}
         </div>
