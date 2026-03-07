@@ -103,7 +103,7 @@ export const calculateCoreDiameter = (wireDiameter, wireCount) => {
     return wireDiameter;
   }
 
-  const packingEfficiency = 0.90;
+  // const packingEfficiency = 0.90;
   // return wireDiameter * Math.sqrt(wireCount / packingEfficiency);
   // Approximate formula for stranded conductor diameter
   return Math.sqrt(wireCount) * wireDiameter / 2;
@@ -154,7 +154,7 @@ export const calculateInsulation = (
   const effectiveReprocessPrice = (reprocessPricePerKg != null && reprocessPricePerKg > 0)
     ? reprocessPricePerKg
     : freshPricePerKg * 0.7;
-
+  console.log("fresh weight1", reprocessWeight, reprocessPercent);
   const freshCost = freshWeight * freshPricePerKg;
   const reprocessCost = reprocessWeight * effectiveReprocessPrice;
 
@@ -238,7 +238,7 @@ export const calculateProcessCosts = (params) => {
     strandingRate,
     annealingRate,
     insulationRate,
-    sheathingRate
+    // sheathingRate
   } = params;
 
   const costs = {};

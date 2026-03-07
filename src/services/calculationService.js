@@ -1,6 +1,5 @@
 import {
     calculateWireDimensions,
-    calculateDrawingLength,
     calculateCoreDiameter,
     calculateInsulation
 } from '../utils/cableCalculations.js';
@@ -140,8 +139,8 @@ export const getCoreOuterDimensions = (coreId, cores = [], cableLength = 100) =>
         core.insulation?.thickness || 0.5,
         cableLength,
         'custom',
-        core.insulation?.freshPercent || 70,
-        core.insulation?.reprocessPercent || 30,
+        core.insulation?.freshPercent || 0,
+        core.insulation?.reprocessPercent || 0,
         0,
         null,
         core.insulation?.density || 1.4
