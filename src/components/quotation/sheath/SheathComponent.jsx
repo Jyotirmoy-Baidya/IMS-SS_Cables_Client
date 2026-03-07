@@ -86,22 +86,34 @@ const SheathComponent = ({
         }
         const type = (insulationTypes || []).find(t => t._id === typeId);
         if (!type) return;
-        const matchingMat = (insulationRawMaterials || []).find(m => {
-            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === typeId;
-        });
         handleUpdate('materialTypeId', typeId);
         handleUpdate('material', type.name);
-        handleUpdate('materialId', matchingMat?._id || null);
-        handleUpdate('materialObject', matchingMat ? {
-            _id: matchingMat._id,
-            name: matchingMat.name,
-            category: matchingMat.category,
-            specifications: matchingMat.specifications
-        } : null);
+        handleUpdate('materialId', null);
+        handleUpdate('materialObject', null);
         handleUpdate('density', type.density || 1.4);
-        handleUpdate('freshPricePerKg', matchingMat?.inventory?.avgPricePerKg || 0);
-        handleUpdate('reprocessPricePerKg', matchingMat?.reprocessInventory?.pricePerKg || 0);
+        handleUpdate('freshPricePerKg', 0);
+        handleUpdate('reprocessPricePerKg', 0);
+    };
+
+    const handleSheathMaterialSelect = (materialId) => {
+        if (!materialId) {
+            handleUpdate('materialId', null);
+            handleUpdate('materialObject', null);
+            handleUpdate('freshPricePerKg', 0);
+            handleUpdate('reprocessPricePerKg', 0);
+            return;
+        }
+        const material = (insulationRawMaterials || []).find(m => m._id === materialId);
+        if (!material) return;
+        handleUpdate('materialId', material._id);
+        handleUpdate('materialObject', {
+            _id: material._id,
+            name: material.name,
+            category: material.category,
+            specifications: material.specifications
+        });
+        handleUpdate('freshPricePerKg', material?.inventory?.avgPricePerKg || 0);
+        handleUpdate('reprocessPricePerKg', material?.reprocessInventory?.pricePerKg || 0);
     };
 
     const handleReprocessTypeSelect = (typeId) => {
@@ -116,21 +128,31 @@ const SheathComponent = ({
         }
         const type = (insulationTypes || []).find(t => t._id === typeId);
         if (!type) return;
-        const matchingMat = (insulationRawMaterials || []).find(m => {
-            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === typeId;
-        });
         handleUpdate('reprocessMaterialTypeId', typeId);
         handleUpdate('reprocessMaterialTypeName', type.name);
-        handleUpdate('reprocessMaterialId', matchingMat?._id || null);
-        handleUpdate('reprocessMaterialObject', matchingMat ? {
-            _id: matchingMat._id,
-            name: matchingMat.name,
-            category: matchingMat.category,
-            specifications: matchingMat.specifications
-        } : null);
+        handleUpdate('reprocessMaterialId', null);
+        handleUpdate('reprocessMaterialObject', null);
         handleUpdate('reprocessDensity', type.density || null);
-        handleUpdate('reprocessPricePerKg', matchingMat?.reprocessInventory?.pricePerKg || 0);
+        handleUpdate('reprocessPricePerKg', 0);
+    };
+
+    const handleReprocessMaterialSelect = (materialId) => {
+        if (!materialId) {
+            handleUpdate('reprocessMaterialId', null);
+            handleUpdate('reprocessMaterialObject', null);
+            handleUpdate('reprocessPricePerKg', 0);
+            return;
+        }
+        const material = (insulationRawMaterials || []).find(m => m._id === materialId);
+        if (!material) return;
+        handleUpdate('reprocessMaterialId', material._id);
+        handleUpdate('reprocessMaterialObject', {
+            _id: material._id,
+            name: material.name,
+            category: material.category,
+            specifications: material.specifications
+        });
+        handleUpdate('reprocessPricePerKg', material?.reprocessInventory?.pricePerKg || 0);
     };
 
     const toggleCore = (coreId) => {
@@ -155,6 +177,20 @@ const SheathComponent = ({
     const outerArea = sheathCalc
         ? (Math.PI * sheathCalc.sheathOuterDiameter * sheathCalc.sheathOuterDiameter) / 4
         : 0;
+
+    const filteredSheathMaterials = sheathGroup.materialTypeId
+        ? (insulationRawMaterials || []).filter(m => {
+            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
+            return mtId === sheathGroup.materialTypeId;
+        })
+        : [];
+
+    const filteredReprocessMaterials = sheathGroup.reprocessMaterialTypeId
+        ? (insulationRawMaterials || []).filter(m => {
+            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
+            return mtId === sheathGroup.reprocessMaterialTypeId;
+        })
+        : [];
 
     const selectedCoreIds = sheathGroup.coreIds || [];
     const selectedSheathIds = sheathGroup.sheathIds || [];
@@ -330,12 +366,35 @@ const SheathComponent = ({
                                 </SelectField>
                             </div>
 
+                            {/* Fresh Raw Material */}
+                            <div className="md:col-span-2">
+                                <FieldLabel>Fresh Raw Material</FieldLabel>
+                                <SelectField
+                                    value={sheathGroup.materialId || ''}
+                                    onChange={e => handleSheathMaterialSelect(e.target.value)}
+                                    disabled={!sheathGroup.materialTypeId}
+                                >
+                                    <option value="">— Select Raw Material —</option>
+                                    {filteredSheathMaterials.map(mat => (
+                                        <option key={mat._id} value={mat._id}>
+                                            {mat.name} | Code: {mat.materialCode} | Stock: {mat.inventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.inventory?.avgPricePerKg?.toFixed(2) || 0}/kg
+                                        </option>
+                                    ))}
+                                </SelectField>
+                                {!sheathGroup.materialTypeId && (
+                                    <p className="text-xs text-gray-400 mt-1">Select material type first</p>
+                                )}
+                                {sheathGroup.materialTypeId && filteredSheathMaterials.length === 0 && (
+                                    <p className="text-xs text-orange-500 mt-1">No raw materials found for this type</p>
+                                )}
+                            </div>
+
                             {/* Fresh Price */}
                             <div>
                                 <FieldLabel>
                                     Fresh Price/kg (₹)
                                     {sheathGroup.freshPricePerKg > 0 && (
-                                        <span className="ml-1 text-emerald-500 normal-case font-normal">(PO avg)</span>
+                                        <span className="ml-1 text-emerald-500 normal-case font-normal">(stock avg)</span>
                                     )}
                                 </FieldLabel>
                                 <InputField
@@ -343,6 +402,7 @@ const SheathComponent = ({
                                     value={sheathGroup.freshPricePerKg || ''}
                                     onChange={e => handleUpdate('freshPricePerKg', parseFloat(e.target.value) || 0)}
                                     placeholder="0.00"
+                                    disabled={!sheathGroup.materialId}
                                 />
                             </div>
 
@@ -381,12 +441,39 @@ const SheathComponent = ({
                                 )}
                             </div>
 
+                            {/* Reprocess Raw Material */}
+                            <div className="md:col-span-2">
+                                <FieldLabel>
+                                    Reprocess Raw Material
+                                    <span className="ml-1 text-gray-400 normal-case font-normal">(optional)</span>
+                                </FieldLabel>
+                                <SelectField
+                                    value={sheathGroup.reprocessMaterialId || ''}
+                                    onChange={e => handleReprocessMaterialSelect(e.target.value)}
+                                    disabled={!sheathGroup.reprocessMaterialTypeId}
+                                    className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
+                                >
+                                    <option value="">— Select Reprocess Raw Material —</option>
+                                    {filteredReprocessMaterials.map(mat => (
+                                        <option key={mat._id} value={mat._id}>
+                                            {mat.name} | Code: {mat.materialCode} | Reprocess: {mat.reprocessInventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.reprocessInventory?.pricePerKg?.toFixed(2) || 0}/kg
+                                        </option>
+                                    ))}
+                                </SelectField>
+                                {!sheathGroup.reprocessMaterialTypeId && (
+                                    <p className="text-xs text-gray-400 mt-1">Select reprocess type first</p>
+                                )}
+                                {sheathGroup.reprocessMaterialTypeId && filteredReprocessMaterials.length === 0 && (
+                                    <p className="text-xs text-orange-500 mt-1">No reprocess materials found for this type</p>
+                                )}
+                            </div>
+
                             {/* Reprocess Price */}
                             <div>
                                 <FieldLabel>
                                     Reprocess Price/kg (₹)
                                     {sheathGroup.reprocessPricePerKg > 0 && (
-                                        <span className="ml-1 text-purple-500 normal-case font-normal">(inv)</span>
+                                        <span className="ml-1 text-purple-500 normal-case font-normal">(stock)</span>
                                     )}
                                 </FieldLabel>
                                 <InputField
@@ -395,6 +482,7 @@ const SheathComponent = ({
                                     onChange={e => handleUpdate('reprocessPricePerKg', parseFloat(e.target.value) || 0)}
                                     placeholder="auto (70% fresh)"
                                     className="border-purple-200"
+                                    disabled={!sheathGroup.reprocessMaterialId}
                                 />
                             </div>
 

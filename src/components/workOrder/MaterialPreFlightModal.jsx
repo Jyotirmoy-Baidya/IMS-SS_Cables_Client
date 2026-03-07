@@ -7,7 +7,7 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
     const [checking, setChecking] = useState(true);
     const [availability, setAvailability] = useState(null);
     const [error, setError] = useState(null);
-    const materialStore = useMaterialRequirementsStore();
+    const { calculateAll } = useMaterialRequirementsStore();
 
     useEffect(() => {
         checkMaterialAvailability();
@@ -19,16 +19,11 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
             setChecking(true);
             setError(null);
 
-            // Calculate material requirements from quotation cores and sheaths
-            await materialStore.calculateAll({
-                cores: quotation.cores || [],
-                sheathGroups: quotation.sheathGroups || [],
-                cableLength: quotation.cableLength || 100
-            });
+            // Extract and aggregate material requirements from quotation
+            // (materialRequired arrays are pre-calculated on backend when quotation is saved)
+            const requirements = await calculateAll(quotation);
 
-            // Get calculated requirements
-            const requirements = materialStore.requirements;
-            console.log("Calculated requirements:", requirements);
+            console.log("Material requirements:", requirements);
 
             if (requirements.length === 0) {
                 setError('No materials found in quotation');
@@ -40,11 +35,13 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
                 materialId: req.materialId,
                 requiredWeight: req.totalWeight
             }));
-
+            console.log(materialRequirements);
             // Check availability for these materials
             const availRes = await api.post('/material-allocation/check-availability', {
                 materialRequirements
             });
+
+            console.log("avaiablility", availRes);
 
             setAvailability(availRes);
         } catch (err) {

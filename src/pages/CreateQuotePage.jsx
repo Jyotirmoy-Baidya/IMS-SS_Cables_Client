@@ -86,8 +86,28 @@ const CreateQuotePage = () => {
                     const q = quoteRes.data;
                     setQuoteNumber(q.quoteNumber || '');
                     setCableLength(q.cableLength || 100);
-                    if (q.cores?.length) setCores(q.cores);
-                    if (q.sheathGroups?.length) setSheathGroups(q.sheathGroups);
+
+                    // Convert cores from MongoDB format (_id) to frontend format (id)
+                    if (q.cores?.length) {
+                        const convertedCores = q.cores.map(core => ({
+                            ...core,
+                            id: core._id || core.id
+                        }));
+                        setCores(convertedCores);
+                    }
+
+                    // Convert sheathGroups from MongoDB format to frontend format
+                    if (q.sheathGroups?.length) {
+                        const convertedSheaths = q.sheathGroups.map(sg => ({
+                            ...sg,
+                            id: sg._id || sg.id,
+                            // Ensure coreIds and sheathIds are arrays of strings, not ObjectId instances
+                            coreIds: Array.isArray(sg.coreIds) ? sg.coreIds.map(id => String(id)) : [],
+                            sheathIds: Array.isArray(sg.sheathIds) ? sg.sheathIds.map(id => String(id)) : []
+                        }));
+                        setSheathGroups(convertedSheaths);
+                    }
+
                     if (q.quoteProcesses?.length) setQuoteProcesses(q.quoteProcesses);
                     setSelectedCustomerId(q.customerId?._id || q.customerId || '');
                     setProfitMarginPercent(q.profitMarginPercent || 0);
@@ -451,7 +471,7 @@ const CreateQuotePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cores, sheathGroups, cableLength, metalTypes, insulationTypes]);
 
-    const totals = materialStore.getTotals();
+    const totals = 0;
 
     // Calculate total process cost from all sources (cores, sheaths, quote-level)
     const totalProcessCost = useMemo(() => {
@@ -504,11 +524,18 @@ const CreateQuotePage = () => {
             const profitAmount = grandTotal * (profitMarginPercent / 100);
             const finalPrice = grandTotal + profitAmount;
 
+            // Sanitize sheathGroups to ensure coreIds and sheathIds are proper arrays
+            const sanitizedSheathGroups = sheathGroups.map(sg => ({
+                ...sg,
+                coreIds: Array.isArray(sg.coreIds) ? sg.coreIds : [],
+                sheathIds: Array.isArray(sg.sheathIds) ? sg.sheathIds : []
+            }));
+
             const payload = {
                 customerId: selectedCustomerId || null,
                 cableLength,
                 cores,
-                sheathGroups,
+                sheathGroups: sanitizedSheathGroups,
                 quoteProcesses,
                 materialCost: totals.totalCost,
                 processCost,

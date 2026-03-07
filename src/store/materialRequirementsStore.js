@@ -1,181 +1,40 @@
 import { create } from 'zustand';
-import {
-    calculateWireDimensions,
-    calculateDrawingLength,
-    calculateMaterialWeight,
-    calculateCoreDiameter,
-    calculateInsulation
-} from '../utils/cableCalculations.js';
-import { fetchMaterialTypes, getMetalTypes, getInsulationTypes } from '../services/materialService.js';
-import { calculateSheathForGroup as calculateSheathService } from '../services/calculationService.js';
+import api from '../api/axiosInstance';
 
 /**
- * Comprehensive Zustand store for all material calculations
- * Handles weights, costs, breakdowns, and totals
+ * Zustand store for material requirements aggregation
+ * Extracts and aggregates materialRequired arrays from cores and sheaths
  */
 const useMaterialRequirementsStore = create((set, get) => ({
-    // Cost totals
-    totalCost: 0,
-
-    // Detailed breakdown for QuotationSummary
-    // Format: { type, coreIndex?, sheathIndex?, coreId?, sheathId?, name, weight?, freshWeight?, reprocessWeight?, reprocessName?, pricePerKg?, cost }
-    details: [],
-
     // Aggregated requirements by material (for MaterialRequirements component)
     requirements: [],
 
     // Raw breakdown by usage
     breakdown: [],
 
-    // Material types cache
-    metalTypes: [],
-    insulationTypes: [],
-
     /**
-     * Calculate everything from quotation data
-     * @param {Object} quotation - { cores, sheathGroups, cableLength }
-     * @param {Object} options - { metalTypes, insulationTypes } (optional - will fetch if not provided)
+     * Extract and aggregate material requirements from quotation cores and sheaths
+     * Uses pre-calculated materialRequired arrays from backend
+     * @param {Object} quotation - { cores, sheathGroups }
      */
-    calculateAll: async (quotation, options = {}) => {
-        const { cores = [], sheathGroups = [], cableLength = 100 } = quotation;
+    calculateAll: async (quotation) => {
+        const { cores = [], sheathGroups = [] } = quotation;
 
-        // Fetch material types if not provided
-        let metalTypes = options.metalTypes || get().metalTypes;
-        let insulationTypes = options.insulationTypes || get().insulationTypes;
-
-        if (!metalTypes.length || !insulationTypes.length) {
-            try {
-                const allTypes = await fetchMaterialTypes();
-                metalTypes = await getMetalTypes(allTypes);
-                insulationTypes = await getInsulationTypes(allTypes);
-                // Cache them in the store
-                set({ metalTypes, insulationTypes });
-            } catch (error) {
-                console.error('Failed to fetch material types:', error);
-                // Continue with empty arrays
-                metalTypes = metalTypes || [];
-                insulationTypes = insulationTypes || [];
-            }
-        }
-
-        // Create sheath calculation function with current context
-        const calculateSheath = (sheathGroup) =>
-            calculateSheathService(sheathGroup, cores, sheathGroups, cableLength);
-
-        let totalCost = 0;
-        const details = [];
         const breakdown = [];
 
         // ═══════════════════════════════════════════════════════
-        // PROCESS EACH CORE
+        // EXTRACT MATERIAL REQUIREMENTS FROM CORES
         // ═══════════════════════════════════════════════════════
         cores.forEach((core, coreIndex) => {
-            const effectiveCoreLength = core.coreLength ?? cableLength;
-            const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-            const drawingLength = calculateDrawingLength(core.wireCount, effectiveCoreLength);
-            const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
-
-            // ─────────────────────────────────────────────────────
-            // 1. CONDUCTOR (METAL)
-            // ─────────────────────────────────────────────────────
-            const materialWeight = calculateMaterialWeight(
-                wireDimensions.areaPerWire,
-                drawingLength,
-                core.materialDensity || 8.96,
-                core.wastagePercent
-            );
-
-            if (core.selectedRod) {
-                const rodPrice = core.selectedRod?.inventory?.avgPricePerKg
-                    || core.selectedRod?.inventory?.lastPricePerKg || 0;
-                const conductorCost = materialWeight * rodPrice;
-                totalCost += conductorCost;
-
-                const metalName = core.selectedRod.name
-                    || metalTypes.find(t => t._id === core.materialTypeId)?.name
-                    || 'Metal';
-
-                // For QuotationSummary details
-                details.push({
-                    type: 'conductor',
-                    coreIndex,
-                    coreId: core.id || core._id,
-                    name: metalName,
-                    weight: parseFloat(materialWeight.toFixed(4)),
-                    pricePerKg: rodPrice,
-                    cost: parseFloat(conductorCost.toFixed(2))
-                });
-
-                // For MaterialRequirements breakdown
-                breakdown.push({
-                    materialId: core.selectedRod._id,
-                    materialName: core.selectedRod.name,
-                    category: 'metal',
-                    purpose: 'conductor',
-                    weight: parseFloat(materialWeight.toFixed(4)),
-                    cost: parseFloat(conductorCost.toFixed(2)),
-                    pricePerKg: rodPrice,
-                    type: 'fresh',
-                    context: {
-                        type: 'core',
-                        coreIndex,
-                        coreId: core.id || core._id,
-                        label: `Core ${coreIndex + 1}`
-                    }
-                });
-            }
-
-            // ─────────────────────────────────────────────────────
-            // 2. INSULATION
-            // ─────────────────────────────────────────────────────
-            const insulationCalc = calculateInsulation(
-                coreDiameter,
-                core.insulation.thickness,
-                effectiveCoreLength,
-                'custom',
-                core.insulation.freshPercent,
-                core.insulation.reprocessPercent,
-                core.insulation.freshPricePerKg || 0,
-                core.insulation.reprocessPricePerKg || null,
-                core.insulation.density || 1.4,
-                core.insulation.reprocessDensity || null
-            );
-
-            totalCost += insulationCalc.totalCost;
-
-            const insulName = core.insulation.material?.name
-                || core.insulation.materialTypeName
-                || insulationTypes.find(t => t._id === core.insulation.materialTypeId)?.name
-                || '';
-
-            const reprocessName = core.insulation.reprocessMaterial?.name
-                || core.insulation.reprocessMaterialTypeName
-                || insulName;
-
-            if (insulName) {
-                // For QuotationSummary details
-                details.push({
-                    type: 'insulation',
-                    coreIndex,
-                    coreId: core.id || core._id,
-                    name: insulName,
-                    freshWeight: insulationCalc.freshWeight,
-                    reprocessWeight: insulationCalc.reprocessWeight,
-                    reprocessName: reprocessName,
-                    cost: insulationCalc.totalCost
-                });
-
-                // For MaterialRequirements breakdown - Fresh
-                if (insulationCalc.freshWeight > 0 && core.insulation?.materialId) {
+            if (core.materialRequired && Array.isArray(core.materialRequired)) {
+                core.materialRequired.forEach(material => {
                     breakdown.push({
-                        materialId: core.insulation.materialId,
-                        materialName: insulName,
-                        category: 'insulation',
-                        purpose: 'insulation-fresh',
-                        weight: parseFloat(insulationCalc.freshWeight.toFixed(4)),
-                        cost: parseFloat(insulationCalc.freshCost.toFixed(2)),
-                        pricePerKg: core.insulation.freshPricePerKg || 0,
-                        type: 'fresh',
+                        materialId: material.materialId,
+                        materialName: material.materialName,
+                        category: material.category,
+                        purpose: material.purpose,
+                        weight: material.weight,
+                        type: material.type,
                         context: {
                             type: 'core',
                             coreIndex,
@@ -183,106 +42,31 @@ const useMaterialRequirementsStore = create((set, get) => ({
                             label: `Core ${coreIndex + 1}`
                         }
                     });
-                }
-
-                // For MaterialRequirements breakdown - Reprocess
-                if (insulationCalc.reprocessWeight > 0) {
-                    const reprocessMaterialId = core.insulation.reprocessMaterialId || core.insulation.materialId;
-                    if (reprocessMaterialId) {
-                        breakdown.push({
-                            materialId: reprocessMaterialId,
-                            materialName: reprocessName,
-                            category: 'insulation',
-                            purpose: 'insulation-reprocess',
-                            weight: parseFloat(insulationCalc.reprocessWeight.toFixed(4)),
-                            cost: parseFloat(insulationCalc.reprocessCost.toFixed(2)),
-                            pricePerKg: core.insulation.reprocessPricePerKg || 0,
-                            type: 'reprocess',
-                            context: {
-                                type: 'core',
-                                coreIndex,
-                                coreId: core.id || core._id,
-                                label: `Core ${coreIndex + 1}`
-                            }
-                        });
-                    }
-                }
+                });
             }
         });
 
         // ═══════════════════════════════════════════════════════
-        // PROCESS EACH SHEATH GROUP
+        // EXTRACT MATERIAL REQUIREMENTS FROM SHEATH GROUPS
         // ═══════════════════════════════════════════════════════
-        sheathGroups.forEach((sg, sheathIndex) => {
-            const sheathCalc = calculateSheath(sg);
-            if (!sheathCalc) return;
-
-            totalCost += sheathCalc.totalCost;
-
-            const sheathName = sg.materialObject?.name
-                || sg.material
-                || insulationTypes.find(t => t._id === sg.materialTypeId)?.name
-                || '';
-
-            const reprocessName = sg.reprocessMaterialObject?.name
-                || sg.reprocessMaterialTypeName
-                || sheathName;
-
-            if (sheathName) {
-                // For QuotationSummary details
-                details.push({
-                    type: 'sheath',
-                    sheathIndex,
-                    sheathId: sg.id || sg._id,
-                    name: sheathName,
-                    freshWeight: sheathCalc.freshWeight,
-                    reprocessWeight: sheathCalc.reprocessWeight,
-                    reprocessName: reprocessName,
-                    cost: sheathCalc.totalCost
-                });
-
-                // For MaterialRequirements breakdown - Fresh
-                if (sheathCalc.freshWeight > 0 && sg.materialId) {
+        sheathGroups.forEach((sheathGroup, sheathIndex) => {
+            if (sheathGroup.materialRequired && Array.isArray(sheathGroup.materialRequired)) {
+                sheathGroup.materialRequired.forEach(material => {
                     breakdown.push({
-                        materialId: sg.materialId,
-                        materialName: sheathName,
-                        category: 'plastic',
-                        purpose: 'sheath-fresh',
-                        weight: parseFloat(sheathCalc.freshWeight.toFixed(4)),
-                        cost: parseFloat(sheathCalc.freshCost.toFixed(2)),
-                        pricePerKg: sg.freshPricePerKg || 0,
-                        type: 'fresh',
+                        materialId: material.materialId,
+                        materialName: material.materialName,
+                        category: material.category,
+                        purpose: material.purpose,
+                        weight: material.weight,
+                        type: material.type,
                         context: {
                             type: 'sheath',
                             sheathIndex,
-                            sheathId: sg.id || sg._id,
+                            sheathId: sheathGroup.id || sheathGroup._id,
                             label: `Sheath Group ${sheathIndex + 1}`
                         }
                     });
-                }
-
-                // For MaterialRequirements breakdown - Reprocess
-                if (sheathCalc.reprocessWeight > 0) {
-                    const reprocessMaterialId = sg.reprocessMaterialId || sg.materialId;
-                    if (reprocessMaterialId) {
-                        breakdown.push({
-                            materialId: reprocessMaterialId,
-                            materialName: reprocessName,
-                            category: 'plastic',
-                            purpose: 'sheath-reprocess',
-                            weight: parseFloat(sheathCalc.reprocessWeight.toFixed(4)),
-                            cost: parseFloat(sheathCalc.reprocessCost.toFixed(2)),
-                            pricePerKg: sg.reprocessPricePerKg || 0,
-                            type: 'reprocess',
-                            context: {
-                                type: 'sheath',
-                                sheathIndex,
-                                sheathId: sg.id || sg._id,
-                                label: `Sheath Group ${sheathIndex + 1}`
-                            }
-                        });
-                    }
-                }
+                });
             }
         });
 
@@ -299,35 +83,75 @@ const useMaterialRequirementsStore = create((set, get) => ({
                     category: item.category,
                     type: item.type,
                     totalWeight: 0,
-                    totalCost: 0,
                     usedIn: []
                 };
             }
             aggregated[key].totalWeight += item.weight;
-            aggregated[key].totalCost += item.cost;
             aggregated[key].usedIn.push({
                 context: item.context,
                 purpose: item.purpose,
-                weight: item.weight,
-                cost: item.cost
+                weight: item.weight
             });
         });
 
         const requirements = Object.values(aggregated).map(mat => ({
             ...mat,
-            totalWeight: parseFloat(mat.totalWeight.toFixed(4)),
-            totalCost: parseFloat(mat.totalCost.toFixed(2))
+            totalWeight: parseFloat(mat.totalWeight.toFixed(4))
         }));
 
-        set({ totalCost, details, requirements, breakdown });
-    },
+        // ═══════════════════════════════════════════════════════
+        // FETCH PRICING INFORMATION FROM DATABASE
+        // ═══════════════════════════════════════════════════════
+        try {
+            // Get unique material IDs
+            const materialIds = [...new Set(requirements.map(req => req.materialId))].filter(Boolean);
 
-    /**
-     * Get totals object (for backward compatibility with QuotationSummary)
-     */
-    getTotals: () => {
-        const { totalCost, details } = get();
-        return { totalCost, details };
+            if (materialIds.length > 0) {
+                // Fetch material pricing information
+                const response = await api.post('/raw-material/get-by-ids', { materialIds });
+
+                const materials = response.data || [];
+
+                // Create a map of materialId -> pricing info
+                const pricingMap = {};
+                materials.forEach(material => {
+                    pricingMap[material._id] = {
+                        avgPricePerKg: material.inventory?.avgPricePerKg || 0,
+                        lastPricePerKg: material.inventory?.lastPricePerKg || 0,
+                        reprocessPricePerKg: material.reprocessInventory?.pricePerKg || 0
+                    };
+                });
+
+                console.log("map", pricingMap);
+
+                // Add pricing to each requirement
+                requirements.forEach(req => {
+                    const pricing = pricingMap[req.materialId];
+                    if (pricing) {
+                        // Use reprocess price for reprocess materials, otherwise use avg price
+                        const pricePerKg = req.type === 'reprocess'
+                            ? (pricing.reprocessPricePerKg || pricing.avgPricePerKg)
+                            : pricing.avgPricePerKg;
+
+                        req.pricePerKg = pricePerKg;
+                        req.totalCost = parseFloat((req.totalWeight * pricePerKg).toFixed(2));
+                    } else {
+                        req.pricePerKg = 0;
+                        req.totalCost = 0;
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching material pricing:', error);
+            // Continue without pricing if fetch fails
+            requirements.forEach(req => {
+                req.pricePerKg = 0;
+                req.totalCost = 0;
+            });
+        }
+        console.log(requirements);
+        set({ requirements, breakdown });
+        return requirements;
     },
 
     /**
@@ -373,7 +197,7 @@ const useMaterialRequirementsStore = create((set, get) => ({
      * Clear all data
      */
     clear: () => {
-        set({ totalCost: 0, details: [], requirements: [], breakdown: [] });
+        set({ requirements: [], breakdown: [] });
     }
 }));
 

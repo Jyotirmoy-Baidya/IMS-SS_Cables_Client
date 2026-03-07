@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, CheckCircle2, User, FileText, MapPin } from 'lucide-react';
 import api from '../../api/axiosInstance';
+import useQuotationProcessStore from '../../store/quotationProcessStore';
 
 const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(true);
@@ -9,11 +10,19 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
     const [allLocations, setAllLocations] = useState([]);
     const [processAssignments, setProcessAssignments] = useState([]);
     const [notes, setNotes] = useState('');
+    const { allProcesses, syncFromQuotation } = useQuotationProcessStore();
 
     useEffect(() => {
         const fetchEmployeesAndInitialize = async () => {
             try {
                 setLoading(true);
+
+                // Sync all processes from quotation (cores, sheaths, and quote-level)
+                syncFromQuotation({
+                    cores: quotation.cores || [],
+                    sheathGroups: quotation.sheathGroups || [],
+                    quoteProcesses: quotation.quoteProcesses || []
+                });
 
                 // Fetch all active employees and locations in parallel
                 const [empRes, locRes] = await Promise.all([
@@ -24,9 +33,9 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                 const locations = locRes.data || [];
                 setAllEmployees(employees);
                 setAllLocations(locations);
-
-                // Extract unique processes from quotation
-                const uniqueProcesses = extractUniqueProcesses(quotation);
+                console.log(allProcesses);
+                // Get unique processes from the store
+                const uniqueProcesses = getUniqueProcesses(allProcesses);
 
                 // Initialize process assignments
                 const assignments = uniqueProcesses.map(process => {
@@ -38,6 +47,8 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                     return {
                         processId: process._id,
                         processName: process.name,
+                        category: process.category,
+                        context: process.context,
                         assignedEmployeeId: eligibleEmployees[0]?._id || '',
                         locationId: locations[0]?._id || '',
                         locationName: locations[0]?.name || '',
@@ -56,25 +67,22 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
         };
 
         fetchEmployeesAndInitialize();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [quotation]);
 
-    const extractUniqueProcesses = (quotation) => {
+    const getUniqueProcesses = (processes) => {
         const processMap = new Map();
 
-        // Extract from quoteProcesses (if it's an array)
-        if (Array.isArray(quotation.quoteProcesses)) {
-            quotation.quoteProcesses.forEach(qp => {
-                if (qp.processId && qp.processName) {
-                    processMap.set(
-                        typeof qp.processId === 'object' ? qp.processId._id : qp.processId,
-                        {
-                            _id: typeof qp.processId === 'object' ? qp.processId._id : qp.processId,
-                            name: qp.processName,
-                        }
-                    );
-                }
-            });
-        }
+        processes.forEach(proc => {
+            if (proc.processId && proc.processName) {
+                processMap.set(proc.processId, {
+                    _id: proc.processId,
+                    name: proc.processName,
+                    category: proc.category,
+                    context: proc.context
+                });
+            }
+        });
 
         return Array.from(processMap.values());
     };
@@ -178,9 +186,19 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                                         <div className="flex items-start gap-4">
                                             {/* Process Info */}
                                             <div className="flex-1">
-                                                <p className="text-sm font-semibold text-gray-800 mb-2">
-                                                    {assignment.processName}
-                                                </p>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <p className="text-sm font-semibold text-gray-800">
+                                                        {assignment.processName}
+                                                    </p>
+                                                    {assignment.context && (
+                                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${assignment.context.type === 'core' ? 'bg-purple-100 text-purple-700' :
+                                                                assignment.context.type === 'sheath' ? 'bg-teal-100 text-teal-700' :
+                                                                    'bg-indigo-100 text-indigo-700'
+                                                            }`}>
+                                                            {assignment.context.label}
+                                                        </span>
+                                                    )}
+                                                </div>
 
                                                 {/* Employee Dropdown */}
                                                 {assignment.eligibleEmployees.length === 0 ? (

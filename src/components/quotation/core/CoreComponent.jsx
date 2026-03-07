@@ -96,24 +96,42 @@ const CoreComponent = ({
         }
         const type = insulationTypes.find(t => t._id === typeId);
         if (!type) return;
-        const matchingMat = (insulationRawMaterials || []).find(m => {
-            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === typeId;
-        });
         onUpdate(core.id, 'insulation', {
             ...core.insulation,
             materialTypeId: typeId,
             materialTypeName: type.name,
-            materialId: matchingMat?._id || null,
-            material: matchingMat ? {
-                _id: matchingMat._id,
-                name: matchingMat.name,
-                category: matchingMat.category,
-                specifications: matchingMat.specifications
-            } : null,
+            materialId: null,
+            material: null,
             density: type.density || 1.4,
-            freshPricePerKg: matchingMat?.inventory?.avgPricePerKg || 0,
-            reprocessPricePerKg: matchingMat?.reprocessInventory?.pricePerKg || 0
+            freshPricePerKg: 0,
+            reprocessPricePerKg: 0
+        });
+    };
+
+    const handleInsulationMaterialSelect = (materialId) => {
+        if (!materialId) {
+            onUpdate(core.id, 'insulation', {
+                ...core.insulation,
+                materialId: null,
+                material: null,
+                freshPricePerKg: 0,
+                reprocessPricePerKg: 0
+            });
+            return;
+        }
+        const material = insulationRawMaterials.find(m => m._id === materialId);
+        if (!material) return;
+        onUpdate(core.id, 'insulation', {
+            ...core.insulation,
+            materialId: material._id,
+            material: {
+                _id: material._id,
+                name: material.name,
+                category: material.category,
+                specifications: material.specifications
+            },
+            freshPricePerKg: material?.inventory?.avgPricePerKg || 0,
+            reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
         });
     };
 
@@ -132,23 +150,39 @@ const CoreComponent = ({
         }
         const type = insulationTypes.find(t => t._id === typeId);
         if (!type) return;
-        const matchingMat = (insulationRawMaterials || []).find(m => {
-            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === typeId;
-        });
         onUpdate(core.id, 'insulation', {
             ...core.insulation,
             reprocessMaterialTypeId: typeId,
             reprocessMaterialTypeName: type.name,
-            reprocessMaterialId: matchingMat?._id || null,
-            reprocessMaterial: matchingMat ? {
-                _id: matchingMat._id,
-                name: matchingMat.name,
-                category: matchingMat.category,
-                specifications: matchingMat.specifications
-            } : null,
+            reprocessMaterialId: null,
+            reprocessMaterial: null,
             reprocessDensity: type.density || null,
-            reprocessPricePerKg: matchingMat?.reprocessInventory?.pricePerKg || 0
+            reprocessPricePerKg: 0
+        });
+    };
+
+    const handleReprocessMaterialSelect = (materialId) => {
+        if (!materialId) {
+            onUpdate(core.id, 'insulation', {
+                ...core.insulation,
+                reprocessMaterialId: null,
+                reprocessMaterial: null,
+                reprocessPricePerKg: 0
+            });
+            return;
+        }
+        const material = insulationRawMaterials.find(m => m._id === materialId);
+        if (!material) return;
+        onUpdate(core.id, 'insulation', {
+            ...core.insulation,
+            reprocessMaterialId: material._id,
+            reprocessMaterial: {
+                _id: material._id,
+                name: material.name,
+                category: material.category,
+                specifications: material.specifications
+            },
+            reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
         });
     };
 
@@ -180,6 +214,20 @@ const CoreComponent = ({
         ? metalRawMaterials.filter(m => {
             const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
             return mtId === core.materialTypeId;
+        })
+        : [];
+
+    const filteredInsulationMaterials = core.insulation?.materialTypeId
+        ? insulationRawMaterials.filter(m => {
+            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
+            return mtId === core.insulation.materialTypeId;
+        })
+        : [];
+
+    const filteredReprocessMaterials = core.insulation?.reprocessMaterialTypeId
+        ? insulationRawMaterials.filter(m => {
+            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
+            return mtId === core.insulation.reprocessMaterialTypeId;
         })
         : [];
 
@@ -519,12 +567,35 @@ const CoreComponent = ({
                                 )}
                             </div>
 
+                            {/* Fresh Raw Material */}
+                            <div className="md:col-span-2">
+                                <FieldLabel>Fresh Raw Material</FieldLabel>
+                                <SelectField
+                                    value={core.insulation.materialId || ''}
+                                    onChange={e => handleInsulationMaterialSelect(e.target.value)}
+                                    disabled={!core.insulation.materialTypeId}
+                                >
+                                    <option value="">— Select Raw Material —</option>
+                                    {filteredInsulationMaterials.map(mat => (
+                                        <option key={mat._id} value={mat._id}>
+                                            {mat.name} | Code: {mat.materialCode} | Stock: {mat.inventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.inventory?.avgPricePerKg?.toFixed(2) || 0}/kg
+                                        </option>
+                                    ))}
+                                </SelectField>
+                                {!core.insulation.materialTypeId && (
+                                    <p className="text-xs text-gray-400 mt-1">Select material type first</p>
+                                )}
+                                {core.insulation.materialTypeId && filteredInsulationMaterials.length === 0 && (
+                                    <p className="text-xs text-orange-500 mt-1">No raw materials found for this type</p>
+                                )}
+                            </div>
+
                             {/* Fresh Price */}
                             <div>
                                 <FieldLabel>
                                     Fresh Price/kg (₹)
                                     {core.insulation.freshPricePerKg > 0 && (
-                                        <span className="ml-1 text-emerald-500 normal-case font-normal">(PO avg)</span>
+                                        <span className="ml-1 text-emerald-500 normal-case font-normal">(stock avg)</span>
                                     )}
                                 </FieldLabel>
                                 <InputField
@@ -532,6 +603,7 @@ const CoreComponent = ({
                                     value={core.insulation.freshPricePerKg || ''}
                                     onChange={e => handleInsulationUpdate('freshPricePerKg', parseFloat(e.target.value) || 0)}
                                     placeholder="0.00"
+                                    disabled={!core.insulation.materialId}
                                 />
                             </div>
 
@@ -570,12 +642,39 @@ const CoreComponent = ({
                                 )}
                             </div>
 
+                            {/* Reprocess Raw Material */}
+                            <div className="md:col-span-2">
+                                <FieldLabel>
+                                    Reprocess Raw Material
+                                    <span className="ml-1 text-gray-400 normal-case font-normal">(optional)</span>
+                                </FieldLabel>
+                                <SelectField
+                                    value={core.insulation.reprocessMaterialId || ''}
+                                    onChange={e => handleReprocessMaterialSelect(e.target.value)}
+                                    disabled={!core.insulation.reprocessMaterialTypeId}
+                                    className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
+                                >
+                                    <option value="">— Select Reprocess Raw Material —</option>
+                                    {filteredReprocessMaterials.map(mat => (
+                                        <option key={mat._id} value={mat._id}>
+                                            {mat.name} | Code: {mat.materialCode} | Reprocess: {mat.reprocessInventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.reprocessInventory?.pricePerKg?.toFixed(2) || 0}/kg
+                                        </option>
+                                    ))}
+                                </SelectField>
+                                {!core.insulation.reprocessMaterialTypeId && (
+                                    <p className="text-xs text-gray-400 mt-1">Select reprocess type first</p>
+                                )}
+                                {core.insulation.reprocessMaterialTypeId && filteredReprocessMaterials.length === 0 && (
+                                    <p className="text-xs text-orange-500 mt-1">No reprocess materials found for this type</p>
+                                )}
+                            </div>
+
                             {/* Reprocess Price */}
                             <div>
                                 <FieldLabel>
                                     Reprocess Price/kg (₹)
                                     {core.insulation.reprocessPricePerKg > 0 && (
-                                        <span className="ml-1 text-purple-500 normal-case font-normal">(inv)</span>
+                                        <span className="ml-1 text-purple-500 normal-case font-normal">(stock)</span>
                                     )}
                                 </FieldLabel>
                                 <InputField
@@ -584,6 +683,7 @@ const CoreComponent = ({
                                     onChange={e => handleInsulationUpdate('reprocessPricePerKg', parseFloat(e.target.value) || 0)}
                                     placeholder="auto (70% fresh)"
                                     className="border-purple-200"
+                                    disabled={!core.insulation.reprocessMaterialId}
                                 />
                             </div>
 
