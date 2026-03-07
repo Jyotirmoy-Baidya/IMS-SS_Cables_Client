@@ -16,6 +16,8 @@ import FinishedGoodsPage from './pages/FinishedGoodsPage'
 import LocationsPage from './pages/LocationsPage'
 import EmployeeLoginPage from './pages/EmployeeLoginPage'
 import EmployeeDashboardPage from './pages/EmployeeDashboardPage'
+import IntermediateProductPage from './pages/IntermediateProductPage'
+import CoreMasterPage from './pages/CoreMasterPage'
 
 const App = () => {
   return (
@@ -39,6 +41,8 @@ const App = () => {
           <Route path='inventory/finished' element={<FinishedGoodsPage />} />
           <Route path='purchase-orders' element={<PurchaseOrdersPage />} />
           <Route path='process-master' element={<ProcessMasterPage />} />
+          <Route path='intermediate-products' element={<IntermediateProductPage />} />
+          <Route path='core-master' element={<CoreMasterPage />} />
           <Route path='users' element={<UsersPage />} />
           <Route path='work-orders' element={<WorkOrdersPage />} />
           <Route path='work-orders/kanban' element={<WorkOrderKanbanPage />} />

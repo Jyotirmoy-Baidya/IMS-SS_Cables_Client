@@ -2,13 +2,50 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Image } from 'lucide-react';
 
 const SOURCE_OPTIONS = [
-    { value: 'manual',              label: 'Manual input (user fills in quotation)' },
-    { value: 'cableLength',         label: 'Cable Length (m) — from quote' },
-    { value: 'coreCount',           label: 'Core Count — from quote' },
-    { value: 'totalWireCount',      label: 'Total Wire Count — sum of all cores' },
-    { value: 'totalDrawingLength',  label: 'Total Drawing Length (m) — sum of all cores' },
+    { value: 'manual', label: 'Manual input (user fills in quotation)' },
+
+    // Cable-level variables
+    { value: 'cableLength', label: 'Cable Length (m) — from quote' },
+    { value: 'coreCount', label: 'Core Count — from quote' },
+    { value: 'totalWireCount', label: 'Total Wire Count — sum of all cores' },
+    { value: 'totalDrawingLength', label: 'Total Drawing Length (m) — sum of all cores' },
     { value: 'totalMaterialWeight', label: 'Total Metal Weight (kg) — sum of all cores' },
-    { value: 'totalCoreArea',       label: 'Total Core Area (mm²) — sum of all cores' },
+    { value: 'totalCoreArea', label: 'Total Core Area (mm²) — sum of all cores' },
+
+    // Core-specific length
+    { value: 'coreLength', label: 'Core Length (m) — individual core length (defaults to cable length)' },
+
+    // Core conductor variables
+    { value: 'coreMaterialDensity', label: 'Core Material Density (g/cm³) — from specific core' },
+    { value: 'coreTotalCoreArea', label: 'Core Total Area (mm²) — from specific core' },
+    { value: 'coreWireCount', label: 'Core Wire Count — from specific core' },
+    { value: 'coreWastagePercent', label: 'Core Wastage % — from specific core' },
+    { value: 'coreHasAnnealing', label: 'Core Has Annealing (0/1) — from specific core' },
+
+    // Core insulation variables
+    { value: 'insulationDensity', label: 'Insulation Density (g/cm³) — from specific core' },
+    { value: 'insulationThickness', label: 'Insulation Thickness (mm) — from specific core' },
+    { value: 'insulationFreshPercent', label: 'Insulation Fresh % — from specific core' },
+    { value: 'insulationReprocessPercent', label: 'Insulation Reprocess % — from specific core' },
+    { value: 'insulationFreshPricePerKg', label: 'Insulation Fresh Price (₹/kg) — from specific core' },
+    { value: 'insulationReprocessPricePerKg', label: 'Insulation Reprocess Price (₹/kg) — from specific core' },
+
+    // Sheath variables
+    { value: 'sheathDensity', label: 'Sheath Density (g/cm³) — from specific sheath' },
+    { value: 'sheathThickness', label: 'Sheath Thickness (mm) — from specific sheath' },
+    { value: 'sheathFreshPercent', label: 'Sheath Fresh % — from specific sheath' },
+    { value: 'sheathReprocessPercent', label: 'Sheath Reprocess % — from specific sheath' },
+    { value: 'sheathFreshPricePerKg', label: 'Sheath Fresh Price (₹/kg) — from specific sheath' },
+    { value: 'sheathReprocessPricePerKg', label: 'Sheath Reprocess Price (₹/kg) — from specific sheath' },
+
+    // Calculated values
+    { value: 'wireDiameter', label: 'Wire Diameter (mm) — calculated' },
+    { value: 'conductorDiameter', label: 'Conductor Diameter (mm) — calculated' },
+    { value: 'insulatedDiameter', label: 'Insulated Diameter (mm) — calculated' },
+    { value: 'drawingLength', label: 'Drawing Length (m) — calculated' },
+    { value: 'materialWeight', label: 'Material Weight (kg) — calculated' },
+    { value: 'insulationWeight', label: 'Insulation Weight (kg) — calculated' },
+    { value: 'sheathWeight', label: 'Sheath Weight (kg) — calculated' },
 ];
 
 const CATEGORY_OPTIONS = [

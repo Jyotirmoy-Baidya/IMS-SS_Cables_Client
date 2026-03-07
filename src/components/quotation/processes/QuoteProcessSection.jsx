@@ -2,13 +2,47 @@ import { useState } from 'react';
 import { Plus, Trash2, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 
 const SOURCE_LABELS = {
-    manual:              'Manual',
-    cableLength:         'Cable Length (m)',
-    coreCount:           'Core Count',
-    totalWireCount:      'Total Wire Count',
-    totalDrawingLength:  'Total Drawing Length (m)',
+    manual: 'Manual',
+
+    // Cable-level
+    cableLength: 'Cable Length (m)',
+    coreCount: 'Core Count',
+    totalWireCount: 'Total Wire Count',
+    totalDrawingLength: 'Total Drawing Length (m)',
     totalMaterialWeight: 'Total Metal Weight (kg)',
-    totalCoreArea:       'Total Core Area (mm²)',
+    totalCoreArea: 'Total Core Area (mm²)',
+
+    // Core conductor
+    coreMaterialDensity: 'Core Material Density (g/cm³)',
+    coreTotalCoreArea: 'Core Total Area (mm²)',
+    coreWireCount: 'Core Wire Count',
+    coreWastagePercent: 'Core Wastage %',
+    coreHasAnnealing: 'Core Has Annealing',
+
+    // Core insulation
+    insulationDensity: 'Insulation Density (g/cm³)',
+    insulationThickness: 'Insulation Thickness (mm)',
+    insulationFreshPercent: 'Insulation Fresh %',
+    insulationReprocessPercent: 'Insulation Reprocess %',
+    insulationFreshPricePerKg: 'Insulation Fresh Price (₹/kg)',
+    insulationReprocessPricePerKg: 'Insulation Reprocess Price (₹/kg)',
+
+    // Sheath
+    sheathDensity: 'Sheath Density (g/cm³)',
+    sheathThickness: 'Sheath Thickness (mm)',
+    sheathFreshPercent: 'Sheath Fresh %',
+    sheathReprocessPercent: 'Sheath Reprocess %',
+    sheathFreshPricePerKg: 'Sheath Fresh Price (₹/kg)',
+    sheathReprocessPricePerKg: 'Sheath Reprocess Price (₹/kg)',
+
+    // Calculated values
+    wireDiameter: 'Wire Diameter (mm)',
+    conductorDiameter: 'Conductor Diameter (mm)',
+    insulatedDiameter: 'Insulated Diameter (mm)',
+    drawingLength: 'Drawing Length (m)',
+    materialWeight: 'Material Weight (kg)',
+    insulationWeight: 'Insulation Weight (kg)',
+    sheathWeight: 'Sheath Weight (kg)',
 };
 
 const evaluateFormula = (formula, variables) => {

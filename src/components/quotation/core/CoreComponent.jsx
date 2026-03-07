@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Zap, Package, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Trash2, Zap, Package, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Copy, Minimize2, Maximize2 } from 'lucide-react';
 import {
     calculateWireDimensions,
     calculateDrawingLength,
@@ -8,6 +8,7 @@ import {
     calculateInsulation,
     calculateOuterArea
 } from '../../../utils/cableCalculations';
+import ProcessSelector from '../processes/ProcessSelector';
 
 const fmtN = (n, d = 3) => Number(n || 0).toFixed(d);
 const fmtCur = (n) => '₹' + Number(n || 0).toFixed(2);
@@ -41,13 +42,20 @@ const SelectField = ({ className = '', children, ...props }) => (
 
 const CoreComponent = ({
     core, index, cableLength,
-    onUpdate, onDelete,
+    onUpdate, onDelete, onDuplicate,
     metalTypes,
     metalRawMaterials,
     insulationTypes,
-    insulationRawMaterials
+    insulationRawMaterials,
+    // Process management props
+    processMasterList = [],
+    quoteContext = {},
+    onAddProcess,
+    onRemoveProcess,
+    onUpdateProcessVariable
 }) => {
     const [showRodSelection, setShowRodSelection] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     const handleCoreUpdate = (field, value) => onUpdate(core.id, field, value);
 
@@ -144,11 +152,12 @@ const CoreComponent = ({
         });
     };
 
-    // Calculations
+    // Calculations - use core length if set, otherwise cable length
+    const effectiveCoreLength = core.coreLength ?? cableLength;
     const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-    const drawingLength = calculateDrawingLength(core.wireCount, cableLength);
+    const drawingLength = calculateDrawingLength(core.wireCount, effectiveCoreLength);
     const materialWeight = calculateMaterialWeight(
-        core.totalCoreArea, cableLength, core.materialDensity, core.wastagePercent
+        core.totalCoreArea, effectiveCoreLength, core.materialDensity, core.wastagePercent
     );
     const rodPrice = core.selectedRod?.inventory?.avgPricePerKg
         || core.selectedRod?.inventory?.lastPricePerKg || 0;
@@ -157,7 +166,7 @@ const CoreComponent = ({
     const insulationCalc = calculateInsulation(
         coreDiameter,
         core.insulation.thickness,
-        cableLength,
+        effectiveCoreLength,
         'custom',
         core.insulation.freshPercent,
         core.insulation.reprocessPercent,
@@ -176,27 +185,130 @@ const CoreComponent = ({
 
     const selectedTypeName = metalTypes.find(t => t._id === core.materialTypeId)?.name || null;
 
+    // Calculate process cost for this core
+    const processCost = (core.processes || []).reduce((sum, process) => {
+        try {
+            const scope = {};
+            (process.variables || []).forEach(v => {
+                scope[v.name] = parseFloat(v.value) || parseFloat(v.defaultValue) || 0;
+            });
+            if (!process.formula?.trim()) return sum;
+            const fn = new Function(...Object.keys(scope), `return (${process.formula})`);
+            const result = fn(...Object.values(scope));
+            return sum + (typeof result === 'number' && isFinite(result) ? result : 0);
+        } catch {
+            return sum;
+        }
+    }, 0);
+
     return (
         <div id={`core-${core.id}`} className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm mb-4">
 
             {/* ── Header ── */}
             <div className="flex items-center justify-between px-5 py-3 bg-linear-to-r from-slate-700 to-slate-800">
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                     <div className="bg-white/20 rounded-full w-7 h-7 flex items-center justify-center">
                         <span className="text-white text-xs font-bold">{index + 1}</span>
                     </div>
-                    <h3 className="text-base font-bold text-white tracking-wide">Core {index + 1}</h3>
+                    <div>
+                        <h3 className="text-base font-bold text-white tracking-wide">Core {index + 1}</h3>
+                        <div className="font-mono text-xs text-slate-300 mt-0.5">
+                            {core.totalCoreArea.toFixed(1)}-{core.wireCount}/{wireDimensions.diameterPerWire.toFixed(1)}-{core.insulation.thickness.toFixed(1)}
+                        </div>
+                    </div>
                 </div>
-                <button
-                    onClick={() => onDelete(core.id)}
-                    className="p-1.5 rounded-lg text-red-300 hover:text-white hover:bg-red-600 transition-colors"
-                    title="Remove core"
-                >
-                    <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* Cost summary when collapsed */}
+                    {isCollapsed && (
+                        <div className="flex items-center gap-3 mr-4 text-xs font-medium">
+                            <span className="text-orange-300">Metal: {fmtCur(materialCost)}</span>
+                            <span className="text-blue-300">Insulation: {fmtCur(insulationCalc.totalCost)}</span>
+                            <span className="text-green-300">Process: {fmtCur(processCost)}</span>
+                            <span className="text-white font-bold ml-2">Total: {fmtCur(materialCost + insulationCalc.totalCost + processCost)}</span>
+                        </div>
+                    )}
+                    <button
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-600 transition-colors"
+                        title={isCollapsed ? "Expand core" : "Minimize core"}
+                    >
+                        {isCollapsed ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+                    </button>
+                    <button
+                        onClick={() => onDuplicate && onDuplicate(core.id)}
+                        className="p-1.5 rounded-lg text-blue-300 hover:text-white hover:bg-blue-600 transition-colors"
+                        title="Duplicate core"
+                    >
+                        <Copy size={16} />
+                    </button>
+                    <button
+                        onClick={() => onDelete(core.id)}
+                        className="p-1.5 rounded-lg text-red-300 hover:text-white hover:bg-red-600 transition-colors"
+                        title="Remove core"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                </div>
             </div>
 
+            {/* Core content - hidden when collapsed */}
+            {!isCollapsed && (
             <div className="p-5 space-y-5 border-l-2">
+
+                {/* ── Core Length Configuration ── */}
+                <div className="bg-linear-to-r from-indigo-50 to-indigo-100 border-2 border-indigo-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="text-indigo-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="21" y1="10" x2="3" y2="10" />
+                                    <line x1="21" y1="6" x2="3" y2="6" />
+                                    <line x1="21" y1="14" x2="3" y2="14" />
+                                    <line x1="21" y1="18" x2="3" y2="18" />
+                                </svg>
+                            </div>
+                            <div>
+                                <span className="text-sm font-bold text-indigo-900">Core Length</span>
+                                <p className="text-xs text-indigo-600 mt-0.5">
+                                    {core.coreLength === null || core.coreLength === undefined
+                                        ? `Using cable length (${cableLength}m)`
+                                        : 'Custom length for this core'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {core.coreLength !== null && core.coreLength !== undefined ? (
+                                <>
+                                    <InputField
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={core.coreLength}
+                                        onChange={e => handleCoreUpdate('coreLength', parseFloat(e.target.value) || 0)}
+                                        className="w-24 text-right font-bold text-indigo-900"
+                                    />
+                                    <span className="text-sm font-semibold text-indigo-700">meters</span>
+                                    <button
+                                        onClick={() => handleCoreUpdate('coreLength', null)}
+                                        className="ml-2 px-3 py-1.5 text-xs bg-white border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 font-medium transition-colors"
+                                    >
+                                        Use Cable Length
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-lg font-bold text-indigo-900">{cableLength} meters</span>
+                                    <button
+                                        onClick={() => handleCoreUpdate('coreLength', cableLength)}
+                                        className="ml-2 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+                                    >
+                                        Set Custom Length
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
 
                 {/* ── Section 1: Conductor Configuration ── */}
                 <div>
@@ -522,7 +634,24 @@ const CoreComponent = ({
                     </div>
                 </div>
 
+                {/* Process Selector for this Core */}
+                <div className="mt-4">
+                    <ProcessSelector
+                        processes={core.processes || []}
+                        onAdd={(entry) => onAddProcess && onAddProcess(entry)}
+                        onRemove={(id) => onRemoveProcess && onRemoveProcess(id)}
+                        onUpdateVariable={(processId, varName, value) =>
+                            onUpdateProcessVariable && onUpdateProcessVariable(processId, varName, value)
+                        }
+                        processMasterList={processMasterList}
+                        quoteContext={quoteContext}
+                        title={`Core ${index + 1} Processes`}
+                        compact={true}
+                    />
+                </div>
+
             </div>
+            )}
         </div>
     );
 };

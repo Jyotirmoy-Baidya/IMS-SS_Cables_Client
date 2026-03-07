@@ -1,21 +1,6 @@
 import { useState } from 'react';
 import { Calculator, ChevronDown, ChevronUp, Package, Zap, Info, TrendingUp } from 'lucide-react';
 
-// Same evaluator used in QuoteProcessSection
-const evaluateFormula = (formula, variables) => {
-    try {
-        const scope = {};
-        variables.forEach(v => { scope[v.name] = parseFloat(v.value) || 0; });
-        if (!formula.trim()) return 0;
-        // eslint-disable-next-line no-new-func
-        const fn = new Function(...Object.keys(scope), `return (${formula})`);
-        const result = fn(...Object.values(scope));
-        return typeof result === 'number' && isFinite(result) ? result : 0;
-    } catch {
-        return 0;
-    }
-};
-
 const fmtINR = (n) =>
     '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -46,7 +31,7 @@ const SectionCard = ({ title, icon: Icon, iconColor = 'text-blue-600', children,
     );
 };
 
-const QuotationSummary = ({ totals, quoteProcesses = [], profitMarginPercent = 0, onProfitMarginChange }) => {
+const QuotationSummary = ({ totals, totalProcessCost = 0, profitMarginPercent = 0, onProfitMarginChange }) => {
     const [showMaterialDetails, setShowMaterialDetails] = useState(false);
 
     // Material cost is the full calculated total (no built-in process rates)
@@ -77,11 +62,8 @@ const QuotationSummary = ({ totals, quoteProcesses = [], profitMarginPercent = 0
 
     const sheathEntries = details.filter(d => d.type === 'sheath');
 
-    // Costs from Manufacturing Process Master entries
-    const mfgProcessCost = quoteProcesses.reduce(
-        (sum, p) => sum + evaluateFormula(p.formula, p.variables),
-        0
-    );
+    // Use the aggregated process cost from all sources (cores, sheaths, quote-level)
+    const mfgProcessCost = totalProcessCost;
 
     const grandTotal = materialCost + mfgProcessCost;
     const profitAmount = grandTotal * (profitMarginPercent / 100);
@@ -226,45 +208,21 @@ const QuotationSummary = ({ totals, quoteProcesses = [], profitMarginPercent = 0
                     </div>
                 </SectionCard>
 
-                {/* ── Manufacturing Processes from Process Master ── */}
-                <SectionCard title="Manufacturing Processes" icon={Zap} iconColor="text-orange-500" defaultOpen={true}>
-                    {quoteProcesses.length === 0 ? (
-                        <p className="text-xs text-gray-400 italic">No manufacturing processes added. Use the Manufacturing Processes section above to add them.</p>
-                    ) : (
-                        quoteProcesses.map((entry) => {
-                            const cost = evaluateFormula(entry.formula, entry.variables);
-                            return (
-                                <div key={entry.id} className="mb-2 last:mb-0 bg-orange-50 border border-orange-100 rounded-lg p-3">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <p className="text-sm font-semibold text-gray-700">{entry.processName}</p>
-                                            {entry.formulaNote && (
-                                                <p className="text-xs text-gray-400 mt-0.5">{entry.formulaNote}</p>
-                                            )}
-                                            <code className="text-xs text-gray-400 mt-1 block">{entry.formula}</code>
-                                        </div>
-                                        <span className="text-sm font-bold text-orange-700 shrink-0 ml-4">{fmtINR(cost)}</span>
-                                    </div>
-                                    {entry.variables.length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-orange-100">
-                                            {entry.variables.map(v => (
-                                                <span key={v.name} className="text-xs text-gray-500 bg-white border border-orange-100 rounded px-2 py-0.5">
-                                                    {v.label}: <strong>{v.value}</strong>{v.unit ? ` ${v.unit}` : ''}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })
-                    )}
-                    {quoteProcesses.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center">
-                            <span className="text-sm font-semibold text-gray-600">Manufacturing Process Total</span>
+                {/* Process cost summary info */}
+                {mfgProcessCost > 0 && (
+                    <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 mb-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Zap size={15} className="text-orange-600" />
+                                <span className="text-sm font-semibold text-orange-800">Manufacturing Process Cost</span>
+                            </div>
                             <span className="text-sm font-bold text-orange-700">{fmtINR(mfgProcessCost)}</span>
                         </div>
-                    )}
-                </SectionCard>
+                        <p className="text-xs text-orange-600 mt-1">
+                            See Manufacturing Process Summary section above for detailed breakdown
+                        </p>
+                    </div>
+                )}
 
                 {/* ── Profit Margin ── */}
                 <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4">

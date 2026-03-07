@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { X, CheckCircle2, AlertTriangle, Package, Loader } from 'lucide-react';
 import api from '../../api/axiosInstance';
+import useMaterialRequirementsStore from '../../store/materialRequirementsStore';
 
 const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
     const [checking, setChecking] = useState(true);
     const [availability, setAvailability] = useState(null);
     const [error, setError] = useState(null);
+    const materialStore = useMaterialRequirementsStore();
 
     useEffect(() => {
         checkMaterialAvailability();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const checkMaterialAvailability = async () => {
@@ -16,20 +19,31 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
             setChecking(true);
             setError(null);
 
-            // Use stored required materials from quotation
-            const materialRequirements = quotation.requiredMaterialsQuantity || [];
+            // Calculate material requirements from quotation cores and sheaths
+            await materialStore.calculateAll({
+                cores: quotation.cores || [],
+                sheathGroups: quotation.sheathGroups || [],
+                cableLength: quotation.cableLength || 100
+            });
 
-            if (materialRequirements.length === 0) {
+            // Get calculated requirements
+            const requirements = materialStore.requirements;
+            console.log("Calculated requirements:", requirements);
+
+            if (requirements.length === 0) {
                 setError('No materials found in quotation');
                 return;
             }
 
+            // Transform requirements to API format
+            const materialRequirements = requirements.map(req => ({
+                materialId: req.materialId,
+                requiredWeight: req.totalWeight
+            }));
+
             // Check availability for these materials
             const availRes = await api.post('/material-allocation/check-availability', {
-                materialRequirements: materialRequirements.map(mat => ({
-                    materialId: mat.materialId,
-                    requiredWeight: mat.requiredWeight
-                }))
+                materialRequirements
             });
 
             setAvailability(availRes);
@@ -204,11 +218,10 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
                     </button>
                     <button
                         onClick={handleProceed}
-                        className={`px-5 py-2 text-sm font-semibold rounded-lg ${
-                            allSufficient
-                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                : 'bg-amber-600 text-white hover:bg-amber-700'
-                        }`}
+                        className={`px-5 py-2 text-sm font-semibold rounded-lg ${allSufficient
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                            : 'bg-amber-600 text-white hover:bg-amber-700'
+                            }`}
                     >
                         {allSufficient ? 'Proceed with Work Order' : 'Proceed Anyway'}
                     </button>

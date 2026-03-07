@@ -1,5 +1,6 @@
-import React from 'react';
-import { Trash2, Layers, CheckCircle, AlertTriangle, Package } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, Layers, CheckCircle, AlertTriangle, Package, Minimize2, Maximize2 } from 'lucide-react';
+import ProcessSelector from '../processes/ProcessSelector';
 
 const fmtN = (n, d = 3) => Number(n || 0).toFixed(d);
 const fmtCur = (n) => '₹' + Number(n || 0).toFixed(2);
@@ -42,11 +43,35 @@ const SheathComponent = ({
     insulationRawMaterials,
     calculateSheathForGroup,
     getAvailableCores,
-    getAvailableSheaths
+    getAvailableSheaths,
+    // Process management props
+    processMasterList = [],
+    quoteContext = {},
+    onAddProcess,
+    onRemoveProcess,
+    onUpdateProcessVariable
 }) => {
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
     const handleUpdate = (field, value) => {
         onUpdate(sheathGroup.id, field, value);
     };
+
+    // Calculate process cost for this sheath
+    const processCost = (sheathGroup.processes || []).reduce((sum, process) => {
+        const scope = {};
+        (process.variables || []).forEach(v => {
+            scope[v.name] = parseFloat(v.value) || 0;
+        });
+        try {
+            if (!process.formula || !process.formula.trim()) return sum;
+            const fn = new Function(...Object.keys(scope), `return (${process.formula})`);
+            const result = fn(...Object.values(scope));
+            return sum + (typeof result === 'number' && isFinite(result) ? result : 0);
+        } catch {
+            return sum;
+        }
+    }, 0);
 
     const handleInsulationTypeSelect = (typeId) => {
         if (!typeId) {
@@ -146,19 +171,47 @@ const SheathComponent = ({
                     </div>
                     <h3 className="text-base font-bold text-white tracking-wide">Sheath Group {index + 1}</h3>
                 </div>
-                <button
-                    onClick={() => onDelete(sheathGroup.id)}
-                    className="p-1.5 rounded-lg text-red-300 hover:text-white hover:bg-red-600 transition-colors"
-                    title="Remove sheath group"
-                >
-                    <Trash2 size={16} />
-                </button>
+
+                <div className="flex items-center gap-2">
+                    {/* Cost summary when collapsed */}
+                    {isCollapsed && sheathCalc && (
+                        <div className="flex items-center gap-3 text-xs mr-2">
+                            <span className="text-teal-100">
+                                Material: {fmtCur(sheathCalc.totalCost)}
+                            </span>
+                            {processCost > 0 && (
+                                <span className="text-teal-100">
+                                    Process: {fmtCur(processCost)}
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Minimize/Maximize button */}
+                    <button
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="p-1.5 rounded-lg text-teal-100 hover:text-white hover:bg-teal-600 transition-colors"
+                        title={isCollapsed ? 'Expand' : 'Collapse'}
+                    >
+                        {isCollapsed ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+                    </button>
+
+                    {/* Delete button */}
+                    <button
+                        onClick={() => onDelete(sheathGroup.id)}
+                        className="p-1.5 rounded-lg text-red-300 hover:text-white hover:bg-red-600 transition-colors"
+                        title="Remove sheath group"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                </div>
             </div>
 
-            <div className="p-5 space-y-5">
+            {!isCollapsed && (
+                <div className="p-5 space-y-5">
 
-                {/* ── Section 1: Content Selection ── */}
-                <div>
+                    {/* ── Section 1: Content Selection ── */}
+                    <div>
                     <div className="flex items-center gap-2 mb-3">
                         <Package size={15} className="text-teal-600" />
                         <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Sheath Contents</span>
@@ -397,7 +450,24 @@ const SheathComponent = ({
                     </div>
                 </div>
 
-            </div>
+                {/* Process Selector for this Sheath */}
+                <div className="mt-4">
+                    <ProcessSelector
+                        processes={sheathGroup.processes || []}
+                        onAdd={(entry) => onAddProcess && onAddProcess(entry)}
+                        onRemove={(id) => onRemoveProcess && onRemoveProcess(id)}
+                        onUpdateVariable={(processId, varName, value) =>
+                            onUpdateProcessVariable && onUpdateProcessVariable(processId, varName, value)
+                        }
+                        processMasterList={processMasterList}
+                        quoteContext={quoteContext}
+                        title={`Sheath ${index + 1} Processes`}
+                        compact={true}
+                    />
+                </div>
+
+                </div>
+            )}
         </div>
     );
 };
