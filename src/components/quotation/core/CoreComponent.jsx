@@ -207,7 +207,8 @@ const CoreComponent = ({
         core.insulation.freshPricePerKg || 0,
         core.insulation.reprocessPricePerKg || null,
         core.insulation.density || 1.4,
-        core.insulation.reprocessDensity || null
+        core.insulation.reprocessDensity || null,
+        core.insulation.wastagePercent || 0
     );
 
     const filteredRods = core.materialTypeId
@@ -705,6 +706,17 @@ const CoreComponent = ({
                                         type="number" step="0.1"
                                         value={core.insulation.thickness}
                                         onChange={e => handleInsulationUpdate('thickness', parseFloat(e.target.value))}
+                                    />
+                                </div>
+
+                                {/* Wastage % */}
+                                <div>
+                                    <FieldLabel>Wastage (%)</FieldLabel>
+                                    <InputField
+                                        type="number" step="0.1" min="0" max="100"
+                                        value={core.insulation.wastagePercent || 0}
+                                        onChange={e => handleInsulationUpdate('wastagePercent', parseFloat(e.target.value) || 0)}
+                                        placeholder="0"
                                     />
                                 </div>
                             </div>

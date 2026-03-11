@@ -506,6 +506,17 @@ const SheathComponent = ({
                                     onChange={e => handleUpdate('thickness', parseFloat(e.target.value))}
                                 />
                             </div>
+
+                            {/* Wastage % */}
+                            <div>
+                                <FieldLabel>Wastage (%)</FieldLabel>
+                                <InputField
+                                    type="number" step="0.1" min="0" max="100"
+                                    value={sheathGroup.wastagePercent || 0}
+                                    onChange={e => handleUpdate('wastagePercent', parseFloat(e.target.value) || 0)}
+                                    placeholder="0"
+                                />
+                            </div>
                         </div>
 
                         {/* Sheath Results */}

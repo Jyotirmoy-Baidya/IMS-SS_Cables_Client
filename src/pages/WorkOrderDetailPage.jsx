@@ -40,10 +40,16 @@ const WorkOrderDetailPage = () => {
     // Process update form
     const [processForm, setProcessForm] = useState({
         status: '',
-        producedQuantity: '',
-        producedSpec: '',
-        storageLocation: '',
         progressPercentage: 0,
+        actualOutput: {
+            producedQuantity: 0,
+            producedItemName: '',
+            producedSpecification: '',
+            storageLocation: '',
+            qualityGrade: '',
+            defectRate: 0,
+            notes: ''
+        },
         notes: '',
     });
 
@@ -108,10 +114,16 @@ const WorkOrderDetailPage = () => {
             setExpandedProcess(processAssignment);
             setProcessForm({
                 status: processAssignment.status || 'pending',
-                producedQuantity: processAssignment.producedQuantity || '',
-                producedSpec: processAssignment.producedSpec || '',
-                storageLocation: processAssignment.storageLocation || '',
                 progressPercentage: processAssignment.progressPercentage || 0,
+                actualOutput: {
+                    producedQuantity: processAssignment.actualOutput?.producedQuantity || 0,
+                    producedItemName: processAssignment.actualOutput?.producedItemName || '',
+                    producedSpecification: processAssignment.actualOutput?.producedSpecification || '',
+                    storageLocation: processAssignment.actualOutput?.storageLocation || '',
+                    qualityGrade: processAssignment.actualOutput?.qualityGrade || '',
+                    defectRate: processAssignment.actualOutput?.defectRate || 0,
+                    notes: processAssignment.actualOutput?.notes || ''
+                },
                 notes: processAssignment.notes || '',
             });
         }
@@ -195,7 +207,10 @@ const WorkOrderDetailPage = () => {
             const updatedAssignments = [...workOrder.processAssignments];
             updatedAssignments[processIdx] = {
                 ...updatedAssignments[processIdx],
-                ...processForm,
+                status: processForm.status,
+                progressPercentage: processForm.progressPercentage,
+                notes: processForm.notes,
+                actualOutput: processForm.actualOutput,
                 completedAt: processForm.status === 'completed' ? new Date() : updatedAssignments[processIdx].completedAt,
                 startedAt: processForm.status === 'in-progress' && !updatedAssignments[processIdx].startedAt
                     ? new Date()
@@ -387,64 +402,183 @@ const WorkOrderDetailPage = () => {
 
                             {/* Expanded Process Details */}
                             {expandedProcess?._id === pa._id && (
-                                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {/* Produced Quantity */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                                <Package size={11} className="inline mr-1" />
-                                                Produced Quantity (m)
-                                            </label>
-                                            <input
-                                                type="number"
-                                                value={processForm.producedQuantity}
-                                                onChange={e => setProcessForm(prev => ({ ...prev, producedQuantity: e.target.value }))}
-                                                placeholder="e.g., 100"
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                            />
+                                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 space-y-4">
+                                    {/* Expected Output Section */}
+                                    {pa.expectedOutput && pa.expectedOutput.outputType !== 'none' && (
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <TrendingUp size={14} className="text-blue-600" />
+                                                <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wide">Expected Output</h4>
+                                                <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                                    pa.expectedOutput.outputType === 'intermediate'
+                                                        ? 'bg-blue-100 text-blue-700'
+                                                        : 'bg-green-100 text-green-700'
+                                                }`}>
+                                                    {pa.expectedOutput.outputType === 'intermediate' ? 'Intermediate' : 'Final'}
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                                <div>
+                                                    <span className="text-blue-600 font-medium">Quantity:</span>
+                                                    <span className="ml-2 text-blue-800 font-semibold">
+                                                        {pa.expectedOutput.expectedQuantity?.toFixed(2) || 0} {pa.expectedOutput.unit || 'm'}
+                                                    </span>
+                                                </div>
+                                                {pa.expectedOutput.expectedItemName && (
+                                                    <div className="col-span-2">
+                                                        <span className="text-blue-600 font-medium">Item:</span>
+                                                        <span className="ml-2 text-blue-800">{pa.expectedOutput.expectedItemName}</span>
+                                                    </div>
+                                                )}
+                                                {pa.expectedOutput.expectedSpecification && (
+                                                    <div className="col-span-2">
+                                                        <span className="text-blue-600 font-medium">Specification:</span>
+                                                        <span className="ml-2 text-blue-800">{pa.expectedOutput.expectedSpecification}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
+                                    )}
 
-                                        {/* Produced Spec */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                                Specification
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={processForm.producedSpec}
-                                                onChange={e => setProcessForm(prev => ({ ...prev, producedSpec: e.target.value }))}
-                                                placeholder="e.g., 0.5sq mm"
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                            />
-                                        </div>
+                                    {/* Actual Output Form */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                            <Package size={14} className="text-emerald-600" />
+                                            Actual Production Output
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* Produced Quantity */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                                    Quantity
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={processForm.actualOutput.producedQuantity}
+                                                        onChange={e => setProcessForm(prev => ({
+                                                            ...prev,
+                                                            actualOutput: { ...prev.actualOutput, producedQuantity: parseFloat(e.target.value) || 0 }
+                                                        }))}
+                                                        placeholder="0.00"
+                                                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                                    />
+                                                    <span className="px-3 py-2 text-sm bg-gray-100 border border-gray-300 rounded-lg text-gray-600">
+                                                        {pa.expectedOutput?.unit || 'm'}
+                                                    </span>
+                                                </div>
+                                            </div>
 
-                                        {/* Storage Location */}
-                                        <div className="col-span-2">
-                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                                <MapPin size={11} className="inline mr-1" />
-                                                Storage Location
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={processForm.storageLocation}
-                                                onChange={e => setProcessForm(prev => ({ ...prev, storageLocation: e.target.value }))}
-                                                placeholder="e.g., bobbin count 10 in shelf 2"
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                            />
-                                        </div>
+                                            {/* Item Name */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                                    Item Name
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={processForm.actualOutput.producedItemName}
+                                                    onChange={e => setProcessForm(prev => ({
+                                                        ...prev,
+                                                        actualOutput: { ...prev.actualOutput, producedItemName: e.target.value }
+                                                    }))}
+                                                    placeholder="e.g., Drawn wire"
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                                />
+                                            </div>
 
-                                        {/* Notes */}
-                                        <div className="col-span-2">
-                                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                                Notes
-                                            </label>
-                                            <textarea
-                                                value={processForm.notes}
-                                                onChange={e => setProcessForm(prev => ({ ...prev, notes: e.target.value }))}
-                                                placeholder="Additional notes or observations..."
-                                                rows={2}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
-                                            />
+                                            {/* Specification */}
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                                    Specification
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={processForm.actualOutput.producedSpecification}
+                                                    onChange={e => setProcessForm(prev => ({
+                                                        ...prev,
+                                                        actualOutput: { ...prev.actualOutput, producedSpecification: e.target.value }
+                                                    }))}
+                                                    placeholder="e.g., 0.5sq mm, 7 wires"
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                                />
+                                            </div>
+
+                                            {/* Storage Location */}
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                                    <MapPin size={11} className="inline mr-1" />
+                                                    Storage Location
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={processForm.actualOutput.storageLocation}
+                                                    onChange={e => setProcessForm(prev => ({
+                                                        ...prev,
+                                                        actualOutput: { ...prev.actualOutput, storageLocation: e.target.value }
+                                                    }))}
+                                                    placeholder="e.g., bobbin count 10 in shelf 2"
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                                />
+                                            </div>
+
+                                            {/* Quality Grade */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                                    Quality Grade
+                                                </label>
+                                                <select
+                                                    value={processForm.actualOutput.qualityGrade}
+                                                    onChange={e => setProcessForm(prev => ({
+                                                        ...prev,
+                                                        actualOutput: { ...prev.actualOutput, qualityGrade: e.target.value }
+                                                    }))}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                                >
+                                                    <option value="">Select Grade</option>
+                                                    <option value="A">A - Excellent</option>
+                                                    <option value="B">B - Good</option>
+                                                    <option value="C">C - Acceptable</option>
+                                                    <option value="rejected">Rejected</option>
+                                                </select>
+                                            </div>
+
+                                            {/* Defect Rate */}
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                                    Defect Rate (%)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    min="0"
+                                                    max="100"
+                                                    value={processForm.actualOutput.defectRate}
+                                                    onChange={e => setProcessForm(prev => ({
+                                                        ...prev,
+                                                        actualOutput: { ...prev.actualOutput, defectRate: parseFloat(e.target.value) || 0 }
+                                                    }))}
+                                                    placeholder="0.0"
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                                                />
+                                            </div>
+
+                                            {/* Notes */}
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                                    Production Notes
+                                                </label>
+                                                <textarea
+                                                    value={processForm.actualOutput.notes}
+                                                    onChange={e => setProcessForm(prev => ({
+                                                        ...prev,
+                                                        actualOutput: { ...prev.actualOutput, notes: e.target.value }
+                                                    }))}
+                                                    placeholder="Any observations, issues, or special notes about the production..."
+                                                    rows={2}
+                                                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200 resize-none"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
@@ -627,17 +761,36 @@ const WorkOrderDetailPage = () => {
                                         </button>
                                     </div>
 
-                                    {/* Show existing intermediate product details if any */}
-                                    {pa.producedQuantity > 0 && (
+                                    {/* Show actual output details if any */}
+                                    {pa.actualOutput && pa.actualOutput.producedQuantity > 0 && (
                                         <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">
-                                                Current Intermediate Product
+                                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2 flex items-center gap-2">
+                                                <CheckCircle2 size={12} />
+                                                Actual Production Output
                                             </p>
-                                            <div className="text-sm text-emerald-800">
-                                                <p><strong>{pa.producedQuantity}m</strong> {pa.producedSpec}</p>
-                                                {pa.storageLocation && (
+                                            <div className="text-sm text-emerald-800 space-y-1">
+                                                <p>
+                                                    <strong>{pa.actualOutput.producedQuantity} {pa.expectedOutput?.unit || 'm'}</strong>
+                                                    {pa.actualOutput.producedItemName && ` - ${pa.actualOutput.producedItemName}`}
+                                                </p>
+                                                {pa.actualOutput.producedSpecification && (
+                                                    <p className="text-xs">{pa.actualOutput.producedSpecification}</p>
+                                                )}
+                                                {pa.actualOutput.qualityGrade && (
+                                                    <p className="text-xs">
+                                                        Quality: <span className={`font-semibold ${
+                                                            pa.actualOutput.qualityGrade === 'A' ? 'text-green-700' :
+                                                            pa.actualOutput.qualityGrade === 'B' ? 'text-blue-700' :
+                                                            pa.actualOutput.qualityGrade === 'C' ? 'text-amber-700' :
+                                                            'text-red-700'
+                                                        }`}>Grade {pa.actualOutput.qualityGrade}</span>
+                                                        {pa.actualOutput.defectRate > 0 && ` (${pa.actualOutput.defectRate}% defect rate)`}
+                                                    </p>
+                                                )}
+                                                {pa.actualOutput.storageLocation && (
                                                     <p className="text-xs text-emerald-600 mt-1">
-                                                        Stored at: {pa.storageLocation}
+                                                        <MapPin size={10} className="inline mr-1" />
+                                                        Stored at: {pa.actualOutput.storageLocation}
                                                     </p>
                                                 )}
                                             </div>

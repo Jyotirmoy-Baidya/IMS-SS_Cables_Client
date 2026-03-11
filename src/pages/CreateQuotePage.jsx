@@ -4,6 +4,7 @@ import { Plus, Save, ArrowLeft, Zap, Layers, Ruler, Eye, EyeOff } from 'lucide-r
 import CoreComponent from '../components/quotation/core/CoreComponent';
 import SheathComponent from '../components/quotation/sheath/SheathComponent';
 import QuotationSummary from '../components/quotation/summary/QuotationSummary';
+import MaterialSummary from '../components/quotation/summary/MaterialSummary';
 import QuoteLevelProcesses from '../components/quotation/processes/QuoteLevelProcesses';
 import ManufacturingProcessSummary from '../components/quotation/summary/ManufacturingProcessSummary';
 import {
@@ -378,7 +379,9 @@ const CreateQuotePage = () => {
             core.insulation?.reprocessPercent || 30,
             0,
             null,
-            core.insulation?.density || 1.4
+            core.insulation?.density || 1.4,
+            core.insulation?.reprocessDensity || null,
+            core.insulation?.wastagePercent || 0
         );
 
         return {
@@ -652,6 +655,17 @@ const CreateQuotePage = () => {
                             );
                         })}
                         <button
+                            onClick={() => scrollToSection('material-summary')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${activeSection === 'material-summary'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                        >
+                            <div className={`w-1.5 h-1.5 rounded-full ${activeSection === 'material-summary' ? 'bg-white' : 'bg-gray-400'
+                                }`}></div>
+                            Materials
+                        </button>
+                        <button
                             onClick={() => scrollToSection('quotation-summary')}
                             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${activeSection === 'quotation-summary'
                                 ? 'bg-purple-600 text-white shadow-sm'
@@ -886,6 +900,14 @@ const CreateQuotePage = () => {
                     />
                 </div>
 
+                {/* Material Requirements Summary */}
+                <MaterialSummary
+                    quotation={{
+                        cores,
+                        sheathGroups,
+                        cableLength
+                    }}
+                />
 
                 {/* Quotation Summary */}
                 <QuotationSummary

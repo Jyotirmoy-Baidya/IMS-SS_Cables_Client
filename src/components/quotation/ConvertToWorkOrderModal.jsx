@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, CheckCircle2, User, FileText, MapPin } from 'lucide-react';
 import api from '../../api/axiosInstance';
 import useQuotationProcessStore from '../../store/quotationProcessStore';
+import useMaterialRequirementsStore from '../../store/materialRequirementsStore';
 
 const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(true);
@@ -9,8 +10,10 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
     const [allEmployees, setAllEmployees] = useState([]);
     const [allLocations, setAllLocations] = useState([]);
     const [processAssignments, setProcessAssignments] = useState([]);
+    const [materialRequirements, setMaterialRequirements] = useState([]);
     const [notes, setNotes] = useState('');
     const { allProcesses, syncFromQuotation } = useQuotationProcessStore();
+    const { calculateAll } = useMaterialRequirementsStore();
 
     useEffect(() => {
         const fetchEmployeesAndInitialize = async () => {
@@ -23,6 +26,10 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                     sheathGroups: quotation.sheathGroups || [],
                     quoteProcesses: quotation.quoteProcesses || []
                 });
+
+                // Calculate material requirements
+                const materials = await calculateAll(quotation);
+                setMaterialRequirements(materials || []);
 
                 // Fetch all active employees and locations in parallel
                 const [empRes, locRes] = await Promise.all([
@@ -44,6 +51,35 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                         emp.processes?.some(p => (typeof p === 'object' ? p._id : p) === process._id)
                     );
 
+                    // Get full process data from allProcesses - match by processId AND context
+                    const processData = allProcesses.find(p => {
+                        if (p.processId !== process._id) return false;
+
+                        // If process has context, match it exactly
+                        if (process.context && p.context) {
+                            return p.context.type === process.context.type &&
+                                   (p.context.coreIndex === process.context.coreIndex ||
+                                    p.context.sheathIndex === process.context.sheathIndex);
+                        }
+
+                        // For quote-level processes without context
+                        return !process.context && !p.context;
+                    });
+
+                    console.log('Process assignment:', {
+                        processName: process.name,
+                        context: process.context,
+                        foundData: !!processData,
+                        output: processData?.output,
+                        variables: processData?.variables
+                    });
+
+                    // Get process cost from quotation
+                    const processCost = getProcessCost(process, quotation);
+
+                    // Extract output configuration
+                    const expectedOutput = processData?.output || { outputType: 'none' };
+
                     return {
                         processId: process._id,
                         processName: process.name,
@@ -53,6 +89,10 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                         locationId: locations[0]?._id || '',
                         locationName: locations[0]?.name || '',
                         addReportAfter: false,
+                        cost: processCost,
+                        costFormula: processData?.formula || '',
+                        variables: processData?.variables || [],
+                        expectedOutput,
                         eligibleEmployees,
                     };
                 });
@@ -71,20 +111,74 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
     }, [quotation]);
 
     const getUniqueProcesses = (processes) => {
+        // Keep processes with unique processId + context combination
+        // This is important because the same process can be used multiple times
+        // with different variables (e.g., for different cores)
         const processMap = new Map();
 
         processes.forEach(proc => {
             if (proc.processId && proc.processName) {
-                processMap.set(proc.processId, {
+                // Create unique key combining processId and context
+                const contextKey = proc.context ?
+                    `${proc.processId}-${proc.context.type}-${proc.context.coreIndex || proc.context.sheathIndex || 0}` :
+                    proc.processId;
+
+                processMap.set(contextKey, {
                     _id: proc.processId,
                     name: proc.processName,
                     category: proc.category,
-                    context: proc.context
+                    context: proc.context,
+                    uniqueKey: contextKey // Store for later matching
                 });
             }
         });
 
         return Array.from(processMap.values());
+    };
+
+    const evalFormula = (formula, variables) => {
+        try {
+            const scope = {};
+            (variables || []).forEach(v => { scope[v.name] = parseFloat(v.value) || 0; });
+            if (!formula || !formula.trim()) return 0;
+            const fn = new Function(...Object.keys(scope), `return (${formula})`);
+            const result = fn(...Object.values(scope));
+            return typeof result === 'number' && isFinite(result) ? result : 0;
+        } catch { return 0; }
+    };
+
+    const interpolateTemplate = (template, variables) => {
+        if (!template) return '';
+        try {
+            const scope = {};
+            (variables || []).forEach(v => { scope[v.name] = parseFloat(v.value) || 0; });
+            return template.replace(/\$\{(\w+)\}/g, (match, varName) => {
+                return scope[varName] !== undefined ? scope[varName] : match;
+            });
+        } catch {
+            return template;
+        }
+    };
+
+    const getProcessCost = (process, quotation) => {
+        // Find process in allProcesses with matching processId and context
+        const processData = allProcesses.find(p => {
+            if (p.processId !== process._id) return false;
+
+            // If process has context, match it exactly
+            if (process.context && p.context) {
+                return p.context.type === process.context.type &&
+                       (p.context.coreIndex === process.context.coreIndex ||
+                        p.context.sheathIndex === process.context.sheathIndex);
+            }
+
+            // For quote-level processes without context
+            return !process.context && !p.context;
+        });
+
+        if (!processData || !processData.formula) return 0;
+
+        return evalFormula(processData.formula, processData.variables || []);
     };
 
     const handleAssignmentChange = (index, field, value) => {
@@ -107,13 +201,77 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
             // Prepare payload
             const payload = {
                 quoteId: quotation._id,
-                processAssignments: processAssignments.map(a => ({
+                processAssignments: processAssignments.map(a => {
+                    const expectedOutput = a.expectedOutput || { outputType: 'none' };
+
+                    const calculatedExpectedOutput = {
+                        outputType: expectedOutput.outputType || 'none',
+                        expectedQuantity: expectedOutput.quantityFormula
+                            ? evalFormula(expectedOutput.quantityFormula, a.variables || [])
+                            : 0,
+                        expectedItemName: expectedOutput.itemNameTemplate
+                            ? interpolateTemplate(expectedOutput.itemNameTemplate, a.variables || [])
+                            : '',
+                        expectedSpecification: expectedOutput.specificationTemplate
+                            ? interpolateTemplate(expectedOutput.specificationTemplate, a.variables || [])
+                            : '',
+                        unit: expectedOutput.unit || 'm',
+                        quantityFormula: expectedOutput.quantityFormula || '',
+                        itemNameTemplate: expectedOutput.itemNameTemplate || '',
+                        specificationTemplate: expectedOutput.specificationTemplate || ''
+                    };
+
+                    console.log('Expected output calculation:', {
+                        processName: a.processName,
+                        context: a.context,
+                        outputType: expectedOutput.outputType,
+                        quantityFormula: expectedOutput.quantityFormula,
+                        variables: a.variables,
+                        calculatedQuantity: calculatedExpectedOutput.expectedQuantity,
+                        calculatedItemName: calculatedExpectedOutput.expectedItemName,
+                        calculatedSpecification: calculatedExpectedOutput.expectedSpecification
+                    });
+
+                    return {
+                        processId: a.processId,
+                        processName: a.processName,
+                        processCategory: a.category || '',
+                        assignedEmployeeId: a.assignedEmployeeId,
+                        locationId: a.locationId,
+                        locationName: a.locationName,
+                        addReportAfter: a.addReportAfter,
+
+                        // Cost information
+                        processCost: a.cost || 0,
+                        costFormula: a.costFormula || '',
+
+                        // Variables snapshot
+                        variables: (a.variables || []).map(v => ({
+                            name: v.name,
+                            label: v.label,
+                            value: parseFloat(v.value) || 0,
+                            unit: v.unit || '',
+                            source: v.source || 'manual'
+                        })),
+
+                        // Expected output
+                        expectedOutput: calculatedExpectedOutput
+                    };
+                }),
+                materialRequirements: materialRequirements.map(req => ({
+                    materialId: req.materialId,
+                    materialName: req.materialName,
+                    category: req.category,
+                    type: req.type,
+                    totalWeight: req.totalWeight,
+                    pricePerKg: req.pricePerKg || 0,
+                    totalCost: req.totalCost || 0,
+                    usedIn: req.usedIn
+                })),
+                processCosts: processAssignments.map(a => ({
                     processId: a.processId,
                     processName: a.processName,
-                    assignedEmployeeId: a.assignedEmployeeId,
-                    locationId: a.locationId,
-                    locationName: a.locationName,
-                    addReportAfter: a.addReportAfter,
+                    cost: a.cost || 0
                 })),
                 notes,
             };

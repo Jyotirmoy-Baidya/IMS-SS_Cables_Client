@@ -62,6 +62,19 @@ const evaluateFormula = (formula, variables) => {
     }
 };
 
+const interpolateTemplate = (template, variables) => {
+    if (!template) return '';
+    try {
+        const scope = {};
+        variables.forEach(v => { scope[v.name] = parseFloat(v.value) || 0; });
+        return template.replace(/\$\{(\w+)\}/g, (match, varName) => {
+            return scope[varName] !== undefined ? scope[varName] : match;
+        });
+    } catch {
+        return template;
+    }
+};
+
 const ProcessSelector = ({
     processes = [],           // Process entries for this core/sheath
     onAdd,                    // (processEntry) => void
@@ -94,7 +107,8 @@ const ProcessSelector = ({
             category: master.category,
             formula: master.formula,
             formulaNote: master.formulaNote,
-            variables
+            variables,
+            output: master.output || { outputType: 'none' }
         };
     };
 
@@ -235,6 +249,48 @@ const ProcessSelector = ({
                                                             )}
                                                         </div>
                                                     ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Output Configuration */}
+                                        {proc.output && proc.output.outputType !== 'none' && (
+                                            <div className="mt-2 pt-2 border-t border-gray-100">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <p className="text-[10px] text-gray-500">Output:</p>
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                                        proc.output.outputType === 'intermediate'
+                                                            ? 'bg-blue-100 text-blue-700'
+                                                            : 'bg-green-100 text-green-700'
+                                                    }`}>
+                                                        {proc.output.outputType === 'intermediate' ? 'Intermediate' : 'Final'}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    {proc.output.quantityFormula && (
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-[10px] text-gray-500">Quantity:</span>
+                                                            <span className="text-xs font-medium text-gray-800">
+                                                                {evaluateFormula(proc.output.quantityFormula, proc.variables).toFixed(2)} {proc.output.unit || 'm'}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    {proc.output.itemNameTemplate && (
+                                                        <div>
+                                                            <span className="text-[10px] text-gray-500">Item:</span>
+                                                            <div className="text-xs text-gray-800 bg-blue-50 px-2 py-1 rounded mt-0.5">
+                                                                {interpolateTemplate(proc.output.itemNameTemplate, proc.variables)}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {proc.output.specificationTemplate && (
+                                                        <div>
+                                                            <span className="text-[10px] text-gray-500">Specification:</span>
+                                                            <div className="text-xs text-gray-700 bg-gray-50 px-2 py-1 rounded mt-0.5">
+                                                                {interpolateTemplate(proc.output.specificationTemplate, proc.variables)}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}

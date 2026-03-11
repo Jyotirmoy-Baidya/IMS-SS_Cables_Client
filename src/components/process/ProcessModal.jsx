@@ -75,7 +75,15 @@ const ProcessModal = ({ open, onClose, onSuccess, process: editProcess }) => {
     const [form, setForm] = useState({
         name: '', description: '', category: 'general',
         formula: '', formulaNote: '',
-        variables: [], isActive: true
+        variables: [],
+        output: {
+            outputType: 'none',
+            quantityFormula: '',
+            itemNameTemplate: '',
+            specificationTemplate: '',
+            unit: 'm'
+        },
+        isActive: true
     });
 
     useEffect(() => {
@@ -87,16 +95,42 @@ const ProcessModal = ({ open, onClose, onSuccess, process: editProcess }) => {
                 formula:     editProcess.formula || '',
                 formulaNote: editProcess.formulaNote || '',
                 variables:   editProcess.variables ? editProcess.variables.map(v => ({ ...v })) : [],
+                output: editProcess.output ? {
+                    outputType: editProcess.output.outputType || 'none',
+                    quantityFormula: editProcess.output.quantityFormula || '',
+                    itemNameTemplate: editProcess.output.itemNameTemplate || '',
+                    specificationTemplate: editProcess.output.specificationTemplate || '',
+                    unit: editProcess.output.unit || 'm'
+                } : {
+                    outputType: 'none',
+                    quantityFormula: '',
+                    itemNameTemplate: '',
+                    specificationTemplate: '',
+                    unit: 'm'
+                },
                 isActive:    editProcess.isActive !== false
             });
         } else {
-            setForm({ name: '', description: '', category: 'general', formula: '', formulaNote: '', variables: [], isActive: true });
+            setForm({
+                name: '', description: '', category: 'general',
+                formula: '', formulaNote: '', variables: [],
+                output: {
+                    outputType: 'none',
+                    quantityFormula: '',
+                    itemNameTemplate: '',
+                    specificationTemplate: '',
+                    unit: 'm'
+                },
+                isActive: true
+            });
         }
     }, [editProcess, open]);
 
     if (!open) return null;
 
     const setField = (field, value) => setForm(f => ({ ...f, [field]: value }));
+
+    const setOutputField = (field, value) => setForm(f => ({ ...f, output: { ...f.output, [field]: value } }));
 
     const addVariable = () => setForm(f => ({ ...f, variables: [...f.variables, { ...EMPTY_VARIABLE }] }));
 
@@ -286,6 +320,121 @@ const ProcessModal = ({ open, onClose, onSuccess, process: editProcess }) => {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* Output Configuration */}
+                    <div className="border-t pt-4">
+                        <h3 className="text-sm font-semibold mb-3 text-gray-700">Output Configuration</h3>
+
+                        <div className="space-y-3">
+                            {/* Output Type */}
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Output Type</label>
+                                <select
+                                    value={form.output.outputType}
+                                    onChange={e => setOutputField('outputType', e.target.value)}
+                                    className="w-full px-3 py-2 border rounded-md text-sm"
+                                >
+                                    <option value="none">None (no product output)</option>
+                                    <option value="intermediate">Intermediate Product (WIP)</option>
+                                    <option value="final">Final Product</option>
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {form.output.outputType === 'none' && 'This process does not produce any trackable output'}
+                                    {form.output.outputType === 'intermediate' && 'Output will be tracked as work-in-progress inventory'}
+                                    {form.output.outputType === 'final' && 'Output is the finished product ready for delivery'}
+                                </p>
+                            </div>
+
+                            {/* Show output fields only if outputType is not 'none' */}
+                            {form.output.outputType !== 'none' && (
+                                <>
+                                    {/* Quantity Formula */}
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">
+                                            Quantity Formula
+                                            <span className="ml-2 text-xs text-gray-400 font-normal">use variable names</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={form.output.quantityFormula}
+                                            onChange={e => setOutputField('quantityFormula', e.target.value)}
+                                            placeholder="e.g. coreLength * 1.05"
+                                            className="w-full px-3 py-2 border rounded-md text-sm font-mono"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Formula to calculate output quantity (e.g., length, weight)
+                                        </p>
+                                    </div>
+
+                                    {/* Unit */}
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Output Unit</label>
+                                        <input
+                                            type="text"
+                                            value={form.output.unit}
+                                            onChange={e => setOutputField('unit', e.target.value)}
+                                            placeholder="e.g. m, kg, pcs"
+                                            className="w-full px-3 py-2 border rounded-md text-sm"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Unit of measurement for output quantity
+                                        </p>
+                                    </div>
+
+                                    {/* Item Name Template */}
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">
+                                            Item Name Template
+                                            <span className="ml-2 text-xs text-gray-400 font-normal">use ${'{'}varName{'}'} for variables</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={form.output.itemNameTemplate}
+                                            onChange={e => setOutputField('itemNameTemplate', e.target.value)}
+                                            placeholder="e.g. Drawn ${'{'}coreTotalCoreArea{'}'}sq mm wire"
+                                            className="w-full px-3 py-2 border rounded-md text-sm"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Template for generating item name. Variables: ${'{'}varName{'}'}
+                                        </p>
+                                    </div>
+
+                                    {/* Specification Template */}
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">
+                                            Specification Template
+                                            <span className="ml-2 text-xs text-gray-400 font-normal">use ${'{'}varName{'}'} for variables</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={form.output.specificationTemplate}
+                                            onChange={e => setOutputField('specificationTemplate', e.target.value)}
+                                            placeholder="e.g. ${'{'}coreTotalCoreArea{'}'} sq mm, ${'{'}coreWireCount{'}'} wires, ${'{'}coreLength{'}'}m"
+                                            className="w-full px-3 py-2 border rounded-md text-sm"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Template for generating specifications. Variables: ${'{'}varName{'}'}
+                                        </p>
+                                    </div>
+
+                                    {/* Example Preview */}
+                                    {form.output.itemNameTemplate && (
+                                        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                            <p className="text-xs font-semibold text-blue-700 mb-1">Example Output:</p>
+                                            <p className="text-sm text-blue-900 font-medium">
+                                                Item: {form.output.itemNameTemplate.replace(/\$\{(\w+)\}/g, (_, v) => `[${v}]`)}
+                                            </p>
+                                            {form.output.specificationTemplate && (
+                                                <p className="text-xs text-blue-800 mt-1">
+                                                    Spec: {form.output.specificationTemplate.replace(/\$\{(\w+)\}/g, (_, v) => `[${v}]`)}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </div>
 
