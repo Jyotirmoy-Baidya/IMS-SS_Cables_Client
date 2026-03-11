@@ -23,7 +23,7 @@ const MaterialSummary = ({ quotation }) => {
         };
 
         loadMaterialRequirements();
-    }, [quotation, calculateAll]);
+    }, [quotation]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Calculate totals
     const totalWeight = requirements.reduce((sum, req) => sum + req.totalWeight, 0);

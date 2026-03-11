@@ -26,6 +26,7 @@ const QuotationsPage = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [creatingNew, setCreatingNew] = useState(false);
 
     // Notes modal state
     const [notesModal, setNotesModal] = useState(null); // { quotation }
@@ -52,6 +53,37 @@ const QuotationsPage = () => {
             console.error('Failed to fetch quotations:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleCreateNewQuotation = async () => {
+        setCreatingNew(true);
+        try {
+            // Create empty draft quotation
+            const payload = {
+                customerId: null,
+                cableLength: 100,
+                cores: [],
+                sheathGroups: [],
+                quoteProcesses: [],
+                materialCost: 0,
+                processCost: 0,
+                grandTotal: 0,
+                profitMarginPercent: 0,
+                profitAmount: 0,
+                finalPrice: 0,
+                status: 'enquired'
+            };
+
+            const res = await api.post('/quotation/create-quotation', payload);
+            const newQuotationId = res.data._id;
+
+            // Redirect to edit page
+            navigate(`/quotation/edit/${newQuotationId}`);
+        } catch (err) {
+            alert('Failed to create quotation: ' + (err.message || 'Unknown error'));
+        } finally {
+            setCreatingNew(false);
         }
     };
 
@@ -158,10 +190,11 @@ const QuotationsPage = () => {
                     <p className="text-sm text-gray-500">Manage cable quotations and enquiries</p>
                 </div>
                 <button
-                    onClick={() => navigate('/quotation/create')}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700"
+                    onClick={handleCreateNewQuotation}
+                    disabled={creatingNew}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-wait"
                 >
-                    <Plus size={16} /> New Quotation
+                    <Plus size={16} /> {creatingNew ? 'Creating...' : 'New Quotation'}
                 </button>
             </div>
 

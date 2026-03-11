@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2, Zap, Package, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Copy, Minimize2, Maximize2 } from 'lucide-react';
 import {
     calculateWireDimensions,
@@ -9,6 +9,7 @@ import {
     calculateOuterArea
 } from '../../../utils/cableCalculations';
 import ProcessSelector from '../processes/ProcessSelector';
+import api from '../../../api/axiosInstance';
 
 const fmtN = (n, d = 3) => Number(n || 0).toFixed(d);
 const fmtCur = (n) => '₹' + Number(n || 0).toFixed(2);
@@ -40,27 +41,202 @@ const SelectField = ({ className = '', children, ...props }) => (
     </select>
 );
 
+// Default initial core structure
+const getDefaultCore = (id) => ({
+    id: id || Date.now(),
+    materialTypeId: null,
+    materialId: null,
+    materialDensity: 8.96,
+    totalCoreArea: 8,
+    wireCount: 16,
+    wastagePercent: 5,
+    selectedRod: null,
+    hasAnnealing: false,
+    coreLength: null,
+    insulation: {
+        materialTypeId: null,
+        materialTypeName: '',
+        materialId: null,
+        reprocessMaterialId: null,
+        thickness: 1,
+        density: 1.4,
+        freshPercent: 100,
+        reprocessPercent: 0,
+        wastagePercent: 5
+    },
+    processes: [],
+    materialRequired: []
+});
+
 const CoreComponent = ({
-    core, index, cableLength,
-    onUpdate, onDelete, onDuplicate,
-    metalTypes,
-    metalRawMaterials,
-    insulationTypes,
-    insulationRawMaterials,
-    // Process management props
-    processMasterList = [],
-    quoteContext = {},
-    onAddProcess,
-    onRemoveProcess,
-    onUpdateProcessVariable
+    core: providedCore,
+    index,
+    cableLength,
+    quotationId,
+    onDeleteFromParent,
+    onDuplicate
 }) => {
+    // Use provided core or create a default one
+    const initialCore = providedCore || getDefaultCore();
+
+    // Local core state
+    const [core, setCore] = useState(initialCore);
+
+    // UI state
     const [showRodSelection, setShowRodSelection] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isSaved, setIsSaved] = useState(!!initialCore._id);
 
-    const handleCoreUpdate = (field, value) => onUpdate(core.id, field, value);
+    // Material data
+    const [metalTypes, setMetalTypes] = useState([]);
+    const [insulationTypes, setInsulationTypes] = useState([]);
+    const [metalRawMaterials, setMetalRawMaterials] = useState([]);
+    const [insulationRawMaterials, setInsulationRawMaterials] = useState([]);
+    const [processMasterList, setProcessMasterList] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch materials and processes on mount
+    useEffect(() => {
+        const fetchMaterials = async () => {
+            try {
+                const [typesRes, metalMatRes, insulMatRes, processRes] = await Promise.all([
+                    api.get('/material-type/get-all-material-types'),
+                    api.get('/raw-material/get-all-materials?category=metal'),
+                    api.get('/raw-material/get-all-materials'),
+                    api.get('/process/get-all-processes?isActive=true')
+                ]);
+
+                const allTypes = typesRes.data || [];
+                setMetalTypes(allTypes.filter(t => t.category === 'metal'));
+                setInsulationTypes(allTypes.filter(t => t.category === 'insulation' || t.category === 'plastic'));
+                setMetalRawMaterials(metalMatRes.data || []);
+                const allMats = insulMatRes.data || [];
+                setInsulationRawMaterials(allMats.filter(m => m.category === 'insulation' || m.category === 'plastic'));
+                setProcessMasterList(processRes.data || []);
+            } catch (err) {
+                console.error('Failed to fetch materials:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchMaterials();
+    }, []);
+
+    // Sync with parent core changes
+    useEffect(() => {
+        setCore(initialCore);
+        setIsSaved(!!initialCore._id);
+    }, [initialCore]);
+
+    // Update local core state
+    const handleCoreUpdate = (field, value) => {
+        setIsSaved(false);
+        setCore(prev => ({ ...prev, [field]: value }));
+    };
 
     const handleInsulationUpdate = (field, value) => {
-        onUpdate(core.id, 'insulation', { ...core.insulation, [field]: value });
+        setIsSaved(false);
+        setCore(prev => ({
+            ...prev,
+            insulation: { ...prev.insulation, [field]: value }
+        }));
+    };
+
+    // Save core to backend
+    const handleSave = async () => {
+        if (!quotationId) {
+            alert('No quotation ID found. Please refresh the page.');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            let response;
+            if (core._id) {
+                // Update existing core
+                response = await api.put(`/quotation/${quotationId}/cores/${core._id}`, core);
+            } else {
+                // Create new core
+                response = await api.post(`/quotation/${quotationId}/cores`, core);
+            }
+
+            // Update local state with saved core data (including _id)
+            setCore(prev => ({ ...prev, _id: response.data._id }));
+            setIsSaved(true);
+        } catch (error) {
+            console.error('Failed to save core:', error);
+            alert('Failed to save core: ' + (error.message || 'Unknown error'));
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Delete core
+    const handleDelete = async () => {
+        // If core is saved to backend, delete it from there
+        if (core._id && quotationId) {
+            try {
+                await api.delete(`/quotation/${quotationId}/cores/${core._id}`);
+            } catch (err) {
+                console.error('Failed to delete core from backend:', err);
+                alert('Failed to delete core: ' + (err.message || 'Unknown error'));
+                return;
+            }
+        }
+
+        // Notify parent to update state (remove from cores array and sheathGroups)
+        if (onDeleteFromParent) {
+            onDeleteFromParent(core.id);
+        }
+    };
+
+    // Process management
+    const addProcess = (entry) => {
+        setIsSaved(false);
+        setCore(prev => ({
+            ...prev,
+            processes: [...(prev.processes || []), entry]
+        }));
+    };
+
+    const removeProcess = (processId) => {
+        setIsSaved(false);
+        setCore(prev => ({
+            ...prev,
+            processes: (prev.processes || []).filter(p => p.id !== processId)
+        }));
+    };
+
+    const updateProcessVariable = (processId, varName, value) => {
+        setIsSaved(false);
+        setCore(prev => ({
+            ...prev,
+            processes: (prev.processes || []).map(p => {
+                if (p.id !== processId) return p;
+                return {
+                    ...p,
+                    variables: p.variables.map(v =>
+                        v.name === varName ? { ...v, value } : v
+                    )
+                };
+            })
+        }));
+    };
+
+    // Build quote context for process variable calculations
+    const quoteContext = {
+        cableLength,
+        coreArea: core.totalCoreArea,
+        wireCount: core.wireCount,
+        coreDiameter: calculateCoreDiameter(
+            calculateWireDimensions(core.totalCoreArea, core.wireCount).diameterPerWire,
+            core.wireCount
+        ),
+        insulationThickness: core.insulation?.thickness || 0,
+        materialDensity: core.materialDensity || 8.96,
+        insulationDensity: core.insulation?.density || 1.4
     };
 
     const handleMaterialTypeSelect = (typeId) => {
@@ -76,114 +252,143 @@ const CoreComponent = ({
     };
 
     const handleRodSelect = (rod) => {
-        onUpdate(core.id, 'selectedRod', rod);
+        setIsSaved(false);
+        setCore(prev => ({ ...prev, selectedRod: rod }));
         setShowRodSelection(false);
     };
 
     const handleInsulationTypeSelect = (typeId) => {
+        setIsSaved(false);
         if (!typeId) {
-            onUpdate(core.id, 'insulation', {
-                ...core.insulation,
-                materialTypeId: null,
-                materialTypeName: '',
-                materialId: null,
-                material: null,
-                density: 1.4,
-                freshPricePerKg: 0,
-                reprocessPricePerKg: 0
-            });
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    materialTypeId: null,
+                    materialTypeName: '',
+                    materialId: null,
+                    material: null,
+                    density: 1.4,
+                    freshPricePerKg: 0,
+                    reprocessPricePerKg: 0
+                }
+            }));
             return;
         }
         const type = insulationTypes.find(t => t._id === typeId);
         if (!type) return;
-        onUpdate(core.id, 'insulation', {
-            ...core.insulation,
-            materialTypeId: typeId,
-            materialTypeName: type.name,
-            materialId: null,
-            material: null,
-            density: type.density || 1.4,
-            freshPricePerKg: 0,
-            reprocessPricePerKg: 0
-        });
+        setCore(prev => ({
+            ...prev,
+            insulation: {
+                ...prev.insulation,
+                materialTypeId: typeId,
+                materialTypeName: type.name,
+                materialId: null,
+                material: null,
+                density: type.density || 1.4,
+                freshPricePerKg: 0,
+                reprocessPricePerKg: 0
+            }
+        }));
     };
 
     const handleInsulationMaterialSelect = (materialId) => {
+        setIsSaved(false);
         if (!materialId) {
-            onUpdate(core.id, 'insulation', {
-                ...core.insulation,
-                materialId: null,
-                material: null,
-                freshPricePerKg: 0,
-                reprocessPricePerKg: 0
-            });
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    materialId: null,
+                    material: null,
+                    freshPricePerKg: 0,
+                    reprocessPricePerKg: 0
+                }
+            }));
             return;
         }
         const material = insulationRawMaterials.find(m => m._id === materialId);
         if (!material) return;
-        onUpdate(core.id, 'insulation', {
-            ...core.insulation,
-            materialId: material._id,
-            material: {
-                _id: material._id,
-                name: material.name,
-                category: material.category,
-                specifications: material.specifications
-            },
-            freshPricePerKg: material?.inventory?.avgPricePerKg || 0,
-            reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
-        });
+        setCore(prev => ({
+            ...prev,
+            insulation: {
+                ...prev.insulation,
+                materialId: material._id,
+                material: {
+                    _id: material._id,
+                    name: material.name,
+                    category: material.category,
+                    specifications: material.specifications
+                },
+                freshPricePerKg: material?.inventory?.avgPricePerKg || 0,
+                reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
+            }
+        }));
     };
 
     const handleReprocessTypeSelect = (typeId) => {
+        setIsSaved(false);
         if (!typeId) {
-            onUpdate(core.id, 'insulation', {
-                ...core.insulation,
-                reprocessMaterialTypeId: null,
-                reprocessMaterialTypeName: '',
-                reprocessMaterialId: null,
-                reprocessMaterial: null,
-                reprocessDensity: null,
-                reprocessPricePerKg: 0
-            });
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    reprocessMaterialTypeId: null,
+                    reprocessMaterialTypeName: '',
+                    reprocessMaterialId: null,
+                    reprocessMaterial: null,
+                    reprocessDensity: null,
+                    reprocessPricePerKg: 0
+                }
+            }));
             return;
         }
         const type = insulationTypes.find(t => t._id === typeId);
         if (!type) return;
-        onUpdate(core.id, 'insulation', {
-            ...core.insulation,
-            reprocessMaterialTypeId: typeId,
-            reprocessMaterialTypeName: type.name,
-            reprocessMaterialId: null,
-            reprocessMaterial: null,
-            reprocessDensity: type.density || null,
-            reprocessPricePerKg: 0
-        });
+        setCore(prev => ({
+            ...prev,
+            insulation: {
+                ...prev.insulation,
+                reprocessMaterialTypeId: typeId,
+                reprocessMaterialTypeName: type.name,
+                reprocessMaterialId: null,
+                reprocessMaterial: null,
+                reprocessDensity: type.density || null,
+                reprocessPricePerKg: 0
+            }
+        }));
     };
 
     const handleReprocessMaterialSelect = (materialId) => {
+        setIsSaved(false);
         if (!materialId) {
-            onUpdate(core.id, 'insulation', {
-                ...core.insulation,
-                reprocessMaterialId: null,
-                reprocessMaterial: null,
-                reprocessPricePerKg: 0
-            });
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    reprocessMaterialId: null,
+                    reprocessMaterial: null,
+                    reprocessPricePerKg: 0
+                }
+            }));
             return;
         }
         const material = insulationRawMaterials.find(m => m._id === materialId);
         if (!material) return;
-        onUpdate(core.id, 'insulation', {
-            ...core.insulation,
-            reprocessMaterialId: material._id,
-            reprocessMaterial: {
-                _id: material._id,
-                name: material.name,
-                category: material.category,
-                specifications: material.specifications
-            },
-            reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
-        });
+        setCore(prev => ({
+            ...prev,
+            insulation: {
+                ...prev.insulation,
+                reprocessMaterialId: material._id,
+                reprocessMaterial: {
+                    _id: material._id,
+                    name: material.name,
+                    category: material.category,
+                    specifications: material.specifications
+                },
+                reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
+            }
+        }));
     };
 
     // Calculations - use core length if set, otherwise cable length
@@ -276,6 +481,22 @@ const CoreComponent = ({
                             <span className="text-white font-bold ml-2">Total: {fmtCur(materialCost + insulationCalc.totalCost + processCost)}</span>
                         </div>
                     )}
+                    {/* Save button */}
+                    {quotationId && (
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving || isSaved}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isSaved
+                                ? 'bg-green-500 text-white cursor-default'
+                                : isSaving
+                                    ? 'bg-slate-500 text-slate-300 cursor-wait'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                                }`}
+                            title={isSaved ? 'Core saved' : 'Save core to quotation'}
+                        >
+                            {isSaving ? 'Saving...' : isSaved ? '✓ Saved' : 'Save Core'}
+                        </button>
+                    )}
                     <button
                         onClick={() => setIsCollapsed(!isCollapsed)}
                         className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-600 transition-colors"
@@ -291,7 +512,7 @@ const CoreComponent = ({
                         <Copy size={16} />
                     </button>
                     <button
-                        onClick={() => onDelete(core.id)}
+                        onClick={handleDelete}
                         className="p-1.5 rounded-lg text-red-300 hover:text-white hover:bg-red-600 transition-colors"
                         title="Remove core"
                     >
@@ -747,20 +968,20 @@ const CoreComponent = ({
                     </div>
 
                     {/* Process Selector for this Core */}
-                    <div className="mt-4">
-                        <ProcessSelector
-                            processes={core.processes || []}
-                            onAdd={(entry) => onAddProcess && onAddProcess(entry)}
-                            onRemove={(id) => onRemoveProcess && onRemoveProcess(id)}
-                            onUpdateVariable={(processId, varName, value) =>
-                                onUpdateProcessVariable && onUpdateProcessVariable(processId, varName, value)
-                            }
-                            processMasterList={processMasterList}
-                            quoteContext={quoteContext}
-                            title={`Core ${index + 1} Processes`}
-                            compact={true}
-                        />
-                    </div>
+                    {!loading && (
+                        <div className="mt-4">
+                            <ProcessSelector
+                                processes={core.processes || []}
+                                onAdd={addProcess}
+                                onRemove={removeProcess}
+                                onUpdateVariable={updateProcessVariable}
+                                processMasterList={processMasterList}
+                                quoteContext={quoteContext}
+                                title={`Core ${index + 1} Processes`}
+                                compact={true}
+                            />
+                        </div>
+                    )}
 
                 </div>
             )}

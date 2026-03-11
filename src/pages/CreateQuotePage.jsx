@@ -10,9 +10,7 @@ import ManufacturingProcessSummary from '../components/quotation/summary/Manufac
 import {
     calculateWireDimensions,
     calculateDrawingLength,
-    calculateMaterialWeight,
-    calculateCoreDiameter,
-    calculateInsulation
+    calculateMaterialWeight
 } from '../utils/cableCalculations';
 import api from '../api/axiosInstance';
 import useMaterialRequirementsStore from '../store/materialRequirementsStore';
@@ -37,10 +35,9 @@ const CreateQuotePage = () => {
     // Shared cable length for all cores
     const [cableLength, setCableLength] = useState(100);
 
-    // DB raw materials data
+    // DB raw materials data (for sheaths and quote-level)
     const [metalTypes, setMetalTypes] = useState([]);
     const [insulationTypes, setInsulationTypes] = useState([]);
-    const [metalRawMaterials, setMetalRawMaterials] = useState([]);
     const [insulationRawMaterials, setInsulationRawMaterials] = useState([]);
     const [processMasterList, setProcessMasterList] = useState([]);
 
@@ -58,12 +55,14 @@ const CreateQuotePage = () => {
     const [saving, setSaving] = useState(false);
     const [quoteNumber, setQuoteNumber] = useState('');
 
+    // Quotation ID from URL params (always present in new workflow)
+    const quotationId = quoteId;
+
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const requests = [
                     api.get('/material-type/get-all-material-types'),
-                    api.get('/raw-material/get-all-materials?category=metal'),
                     api.get('/raw-material/get-all-materials'),
                     api.get('/process/get-all-processes?isActive=true'),
                     api.get('/customer/get-all-customer'),
@@ -71,12 +70,11 @@ const CreateQuotePage = () => {
                 if (quoteId) requests.push(api.get(`/quotation/get-one-quotation/${quoteId}`));
 
                 const results = await Promise.all(requests);
-                const [typesRes, metalMatRes, insulMatRes, processRes, customerRes, quoteRes] = results;
+                const [typesRes, insulMatRes, processRes, customerRes, quoteRes] = results;
 
                 const allTypes = typesRes.data || [];
                 setMetalTypes(allTypes.filter(t => t.category === 'metal'));
                 setInsulationTypes(allTypes.filter(t => t.category === 'insulation' || t.category === 'plastic'));
-                setMetalRawMaterials(metalMatRes.data || []);
                 const allMats = insulMatRes.data || [];
                 setInsulationRawMaterials(allMats.filter(m => m.category === 'insulation' || m.category === 'plastic'));
                 setProcessMasterList(processRes.data || []);
@@ -121,31 +119,7 @@ const CreateQuotePage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [quoteId]);
 
-    const [cores, setCores] = useState([{
-        id: 1,
-        materialTypeId: null,
-        materialDensity: 8.96,
-        totalCoreArea: 8,
-        wireCount: 16,
-        wastagePercent: 5,
-        selectedRod: null,
-        hasAnnealing: false,
-        coreLength: null,  // null = use cable length
-        processes: [],  // Added: processes for this core
-        insulation: {
-            materialTypeId: null,
-            materialTypeName: '',
-            density: 1.4,
-            thickness: 0.5,
-            freshPercent: 70,
-            reprocessPercent: 30,
-            freshPricePerKg: 0,
-            reprocessMaterialTypeId: null,   // reprocess portion can be a different material
-            reprocessMaterialTypeName: '',
-            reprocessDensity: null,          // null = use same density as fresh
-            reprocessPricePerKg: 0
-        }
-    }]);
+    const [cores, setCores] = useState([]);
 
     const [sheathGroups, setSheathGroups] = useState([{
         id: 1,
@@ -153,12 +127,15 @@ const CreateQuotePage = () => {
         sheathIds: [],
         material: '',
         materialTypeId: null,
+        materialId: null,
         density: 1.4,
         thickness: 1.0,
+        wastagePercent: 0,
         freshPercent: 60,
         reprocessPercent: 40,
         freshPricePerKg: 0,
         reprocessMaterialTypeId: null,
+        reprocessMaterialId: null,
         reprocessMaterialTypeName: '',
         reprocessDensity: null,
         reprocessPricePerKg: 0,
@@ -169,44 +146,12 @@ const CreateQuotePage = () => {
     // Core management
     const addCore = () => {
         const newId = Math.max(...cores.map(c => c.id), 0) + 1;
-        setCores([...cores, {
-            id: newId,
-            materialTypeId: null,
-            materialDensity: 8.96,
-            totalCoreArea: 8,
-            wireCount: 16,
-            wastagePercent: 5,
-            selectedRod: null,
-            hasAnnealing: false,
-            coreLength: null,  // null = use cable length
-            processes: [],  // Added: processes for this core
-            insulation: {
-                materialTypeId: null,
-                materialTypeName: '',
-                density: 1.4,
-                thickness: 0.5,
-                freshPercent: 70,
-                reprocessPercent: 30,
-                freshPricePerKg: 0,
-                reprocessMaterialTypeId: null,
-                reprocessMaterialTypeName: '',
-                reprocessDensity: null,
-                reprocessPricePerKg: 0
-            }
-        }]);
-    };
-
-    const updateCore = (id, field, value) => {
-        setCores(prev => prev.map(core => {
-            if (core.id !== id) return core;
-            if (field === 'materialTypeId' && value !== core.materialTypeId) {
-                return { ...core, [field]: value, selectedRod: null };
-            }
-            return { ...core, [field]: value };
-        }));
+        // Add minimal core object - CoreComponent will provide defaults
+        setCores([...cores, { id: newId }]);
     };
 
     const deleteCore = (id) => {
+        // Update local state - CoreComponent handles backend deletion
         setCores(cores.filter(core => core.id !== id));
         setSheathGroups(sheathGroups.map(sg => ({
             ...sg,
@@ -222,6 +167,7 @@ const CreateQuotePage = () => {
         const duplicatedCore = {
             ...coreToDuplicate,
             id: newId,
+            _id: undefined, // Clear backend ID so it's treated as new
             // Deep copy insulation object
             insulation: { ...coreToDuplicate.insulation },
             // Deep copy processes array
@@ -244,12 +190,15 @@ const CreateQuotePage = () => {
             sheathIds: [],
             material: '',
             materialTypeId: null,
+            materialId: null,
             density: 1.4,
             thickness: 1.0,
+            wastagePercent: 0,
             freshPercent: 60,
             reprocessPercent: 40,
             freshPricePerKg: 0,
             reprocessMaterialTypeId: null,
+            reprocessMaterialId: null,
             reprocessMaterialTypeName: '',
             reprocessDensity: null,
             reprocessPricePerKg: 0,
@@ -282,35 +231,6 @@ const CreateQuotePage = () => {
             return {
                 ...p,
                 variables: p.variables.map(v => v.name === varName ? { ...v, value } : v)
-            };
-        }));
-    };
-
-    // Core process management
-    const addCoreProcess = (coreId, processEntry) => {
-        setCores(prev => prev.map(core =>
-            core.id === coreId ? { ...core, processes: [...(core.processes || []), processEntry] } : core
-        ));
-    };
-
-    const removeCoreProcess = (coreId, processEntryId) => {
-        setCores(prev => prev.map(core =>
-            core.id === coreId ? { ...core, processes: (core.processes || []).filter(p => p.id !== processEntryId) } : core
-        ));
-    };
-
-    const updateCoreProcessVariable = (coreId, processEntryId, varName, value) => {
-        setCores(prev => prev.map(core => {
-            if (core.id !== coreId) return core;
-            return {
-                ...core,
-                processes: (core.processes || []).map(p => {
-                    if (p.id !== processEntryId) return p;
-                    return {
-                        ...p,
-                        variables: p.variables.map(v => v.name === varName ? { ...v, value } : v)
-                    };
-                })
             };
         }));
     };
@@ -364,52 +284,12 @@ const CreateQuotePage = () => {
         };
     }, [cores, cableLength]);
 
-    // Build core-specific context (merges global + core data)
-    const buildCoreContext = (core) => {
-        const effectiveCoreLength = core.coreLength ?? cableLength;  // Use core length if set, otherwise cable length
-        const wireDims = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-        const coreDiameter = calculateCoreDiameter(wireDims.diameterPerWire, core.wireCount);
-        const drawingLength = calculateDrawingLength(core.wireCount, effectiveCoreLength);
-        const insulationCalc = calculateInsulation(
-            coreDiameter,
-            core.insulation?.thickness || 0.5,
-            effectiveCoreLength,
-            'custom',
-            core.insulation?.freshPercent || 70,
-            core.insulation?.reprocessPercent || 30,
-            0,
-            null,
-            core.insulation?.density || 1.4,
-            core.insulation?.reprocessDensity || null,
-            core.insulation?.wastagePercent || 0
-        );
-
-        return {
-            ...quoteContext,
-            // Core-specific length
-            coreLength: effectiveCoreLength,
-            // Core conductor variables
-            coreMaterialDensity: core.materialDensity || 8.96,
-            coreTotalCoreArea: core.totalCoreArea || 0,
-            coreWireCount: core.wireCount || 0,
-            coreWastagePercent: core.wastagePercent || 0,
-            coreHasAnnealing: core.hasAnnealing ? 1 : 0,
-            // Core insulation variables
-            insulationDensity: core.insulation?.density || 0,
-            insulationThickness: core.insulation?.thickness || 0,
-            insulationFreshPercent: core.insulation?.freshPercent || 0,
-            insulationReprocessPercent: core.insulation?.reprocessPercent || 0,
-            insulationFreshPricePerKg: core.insulation?.freshPricePerKg || 0,
-            insulationReprocessPricePerKg: core.insulation?.reprocessPricePerKg || 0,
-            // Calculated values
-            wireDiameter: wireDims.diameterPerWire || 0,
-            conductorDiameter: coreDiameter || 0,
-            insulatedDiameter: insulationCalc.insulatedDiameter || 0,
-            drawingLength: drawingLength || 0,
-            materialWeight: calculateMaterialWeight(wireDims.areaPerWire, drawingLength, core.materialDensity, core.wastagePercent) || 0,
-            insulationWeight: (insulationCalc.freshWeight || 0) + (insulationCalc.reprocessWeight || 0)
-        };
-    };
+    // Memoized quotation object for MaterialSummary
+    const quotation = useMemo(() => ({
+        cores,
+        sheathGroups,
+        cableLength
+    }), [cores, sheathGroups, cableLength]);
 
     // Build sheath-specific context (merges global + sheath data)
     const buildSheathContext = (sheath) => {
@@ -534,10 +414,14 @@ const CreateQuotePage = () => {
                 sheathIds: Array.isArray(sg.sheathIds) ? sg.sheathIds : []
             }));
 
+            if (!quotationId) {
+                throw new Error('No quotation ID found. Please refresh the page.');
+            }
+
             const payload = {
                 customerId: selectedCustomerId || null,
                 cableLength,
-                cores,
+                // cores are managed separately via individual save buttons
                 sheathGroups: sanitizedSheathGroups,
                 quoteProcesses,
                 materialCost: totals.totalCost,
@@ -549,11 +433,9 @@ const CreateQuotePage = () => {
                 status: statusOverride || 'enquired'
             };
 
-            if (quoteId) {
-                await api.put(`/quotation/update-quotation/${quoteId}`, payload);
-            } else {
-                await api.post('/quotation/create-quotation', payload);
-            }
+            // Update the quotation (cores already saved individually)
+            await api.patch(`/quotation/patch-quotation/${quotationId}`, payload);
+
             navigate('/quotations');
         } catch (err) {
             alert('Failed to save: ' + (err.message || 'Unknown error'));
@@ -813,24 +695,13 @@ const CreateQuotePage = () => {
 
                 {cores.map((core, idx) => (
                     <CoreComponent
-                        key={core.id}
+                        key={idx}
                         core={core}
                         index={idx}
                         cableLength={cableLength}
-                        onUpdate={updateCore}
-                        onDelete={deleteCore}
+                        quotationId={quotationId}
+                        onDeleteFromParent={deleteCore}
                         onDuplicate={duplicateCore}
-                        metalTypes={metalTypes}
-                        metalRawMaterials={metalRawMaterials}
-                        insulationTypes={insulationTypes}
-                        insulationRawMaterials={insulationRawMaterials}
-                        processMasterList={processMasterList}
-                        quoteContext={buildCoreContext(core)}
-                        onAddProcess={(entry) => addCoreProcess(core.id, entry)}
-                        onRemoveProcess={(processId) => removeCoreProcess(core.id, processId)}
-                        onUpdateProcessVariable={(processId, varName, value) =>
-                            updateCoreProcessVariable(core.id, processId, varName, value)
-                        }
                     />
                 ))}
 
@@ -901,13 +772,7 @@ const CreateQuotePage = () => {
                 </div>
 
                 {/* Material Requirements Summary */}
-                <MaterialSummary
-                    quotation={{
-                        cores,
-                        sheathGroups,
-                        cableLength
-                    }}
-                />
+                <MaterialSummary quotation={quotation} />
 
                 {/* Quotation Summary */}
                 <QuotationSummary
