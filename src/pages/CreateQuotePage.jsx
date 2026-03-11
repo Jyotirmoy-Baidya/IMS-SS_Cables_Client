@@ -14,7 +14,6 @@ import {
 } from '../utils/cableCalculations';
 import api from '../api/axiosInstance';
 import useMaterialRequirementsStore from '../store/materialRequirementsStore';
-import { calculateSheathForGroup } from '../services/calculationService';
 
 const evalFormula = (formula, variables) => {
     try {
@@ -35,10 +34,9 @@ const CreateQuotePage = () => {
     // Shared cable length for all cores
     const [cableLength, setCableLength] = useState(100);
 
-    // DB raw materials data (for sheaths and quote-level)
+    // DB raw materials data (for quote-level processes only - cores/sheaths fetch their own)
     const [metalTypes, setMetalTypes] = useState([]);
     const [insulationTypes, setInsulationTypes] = useState([]);
-    const [insulationRawMaterials, setInsulationRawMaterials] = useState([]);
     const [processMasterList, setProcessMasterList] = useState([]);
 
     // Processes added to this quotation
@@ -63,20 +61,17 @@ const CreateQuotePage = () => {
             try {
                 const requests = [
                     api.get('/material-type/get-all-material-types'),
-                    api.get('/raw-material/get-all-materials'),
                     api.get('/process/get-all-processes?isActive=true'),
                     api.get('/customer/get-all-customer'),
                 ];
                 if (quoteId) requests.push(api.get(`/quotation/get-one-quotation/${quoteId}`));
 
                 const results = await Promise.all(requests);
-                const [typesRes, insulMatRes, processRes, customerRes, quoteRes] = results;
+                const [typesRes, processRes, customerRes, quoteRes] = results;
 
                 const allTypes = typesRes.data || [];
                 setMetalTypes(allTypes.filter(t => t.category === 'metal'));
                 setInsulationTypes(allTypes.filter(t => t.category === 'insulation' || t.category === 'plastic'));
-                const allMats = insulMatRes.data || [];
-                setInsulationRawMaterials(allMats.filter(m => m.category === 'insulation' || m.category === 'plastic'));
                 setProcessMasterList(processRes.data || []);
                 setCustomers(customerRes.data || []);
 
@@ -121,26 +116,7 @@ const CreateQuotePage = () => {
 
     const [cores, setCores] = useState([]);
 
-    const [sheathGroups, setSheathGroups] = useState([{
-        id: 1,
-        coreIds: [],
-        sheathIds: [],
-        material: '',
-        materialTypeId: null,
-        materialId: null,
-        density: 1.4,
-        thickness: 1.0,
-        wastagePercent: 0,
-        freshPercent: 60,
-        reprocessPercent: 40,
-        freshPricePerKg: 0,
-        reprocessMaterialTypeId: null,
-        reprocessMaterialId: null,
-        reprocessMaterialTypeName: '',
-        reprocessDensity: null,
-        reprocessPricePerKg: 0,
-        processes: []  // Added: processes for this sheath
-    }]);
+    const [sheathGroups, setSheathGroups] = useState([]);
 
 
     // Core management
@@ -184,35 +160,12 @@ const CreateQuotePage = () => {
     // Sheath management
     const addSheathGroup = () => {
         const newId = Math.max(...sheathGroups.map(sg => sg.id), 0) + 1;
-        setSheathGroups([...sheathGroups, {
-            id: newId,
-            coreIds: [],
-            sheathIds: [],
-            material: '',
-            materialTypeId: null,
-            materialId: null,
-            density: 1.4,
-            thickness: 1.0,
-            wastagePercent: 0,
-            freshPercent: 60,
-            reprocessPercent: 40,
-            freshPricePerKg: 0,
-            reprocessMaterialTypeId: null,
-            reprocessMaterialId: null,
-            reprocessMaterialTypeName: '',
-            reprocessDensity: null,
-            reprocessPricePerKg: 0,
-            processes: []  // Added: processes for this sheath
-        }]);
-    };
-
-    const updateSheathGroup = (id, field, value) => {
-        setSheathGroups(prev => prev.map(sg =>
-            sg.id === id ? { ...sg, [field]: value } : sg
-        ));
+        // Add minimal sheath object - SheathComponent will provide defaults
+        setSheathGroups([...sheathGroups, { id: newId }]);
     };
 
     const deleteSheathGroup = (id) => {
+        // Update local state - SheathComponent handles backend deletion
         setSheathGroups(sheathGroups.filter(sg => sg.id !== id));
     };
 
@@ -235,34 +188,6 @@ const CreateQuotePage = () => {
         }));
     };
 
-    // Sheath process management
-    const addSheathProcess = (sheathId, processEntry) => {
-        setSheathGroups(prev => prev.map(sheath =>
-            sheath.id === sheathId ? { ...sheath, processes: [...(sheath.processes || []), processEntry] } : sheath
-        ));
-    };
-
-    const removeSheathProcess = (sheathId, processEntryId) => {
-        setSheathGroups(prev => prev.map(sheath =>
-            sheath.id === sheathId ? { ...sheath, processes: (sheath.processes || []).filter(p => p.id !== processEntryId) } : sheath
-        ));
-    };
-
-    const updateSheathProcessVariable = (sheathId, processEntryId, varName, value) => {
-        setSheathGroups(prev => prev.map(sheath => {
-            if (sheath.id !== sheathId) return sheath;
-            return {
-                ...sheath,
-                processes: (sheath.processes || []).map(p => {
-                    if (p.id !== processEntryId) return p;
-                    return {
-                        ...p,
-                        variables: p.variables.map(v => v.name === varName ? { ...v, value } : v)
-                    };
-                })
-            };
-        }));
-    };
 
     // Quote context — auto-bound variable values from the current quote state
     const quoteContext = useMemo(() => {
@@ -291,53 +216,6 @@ const CreateQuotePage = () => {
         cableLength
     }), [cores, sheathGroups, cableLength]);
 
-    // Build sheath-specific context (merges global + sheath data)
-    const buildSheathContext = (sheath) => {
-        return {
-            ...quoteContext,
-            // Sheath variables
-            sheathDensity: sheath.density || 0,
-            sheathThickness: sheath.thickness || 0,
-            sheathFreshPercent: sheath.freshPercent || 0,
-            sheathReprocessPercent: sheath.reprocessPercent || 0,
-            sheathFreshPricePerKg: sheath.freshPricePerKg || 0,
-            sheathReprocessPricePerKg: sheath.reprocessPricePerKg || 0,
-            // Sheath weight would be calculated based on sheath dimensions
-            sheathWeight: 0 // TODO: Calculate based on sheath dimensions
-        };
-    };
-
-
-    // Helper to check which cores are available (not used in any sheath)
-    const getAvailableCores = (excludeSheathId = null) => {
-        const usedCoreIds = new Set();
-        sheathGroups.forEach(sg => {
-            if (sg.id !== excludeSheathId) {
-                (sg.coreIds || []).forEach(cid => usedCoreIds.add(cid));
-            }
-        });
-        return cores.filter(c => !usedCoreIds.has(c.id));
-    };
-
-    // Helper to check which sheaths are available (not used in any other sheath, and not self)
-    const getAvailableSheaths = (excludeSheathId) => {
-        const usedSheathIds = new Set();
-        sheathGroups.forEach(sg => {
-            if (sg.id !== excludeSheathId) {
-                (sg.sheathIds || []).forEach(sid => usedSheathIds.add(sid));
-            }
-        });
-        return sheathGroups.filter(sg =>
-            sg.id !== excludeSheathId &&
-            !usedSheathIds.has(sg.id) &&
-            ((sg.coreIds && sg.coreIds.length > 0) || (sg.sheathIds && sg.sheathIds.length > 0))
-        );
-    };
-
-    // Wrapper for calculateSheathForGroup that provides current context
-    const calculateSheathWithContext = (sheathGroup) => {
-        return calculateSheathForGroup(sheathGroup, cores, sheathGroups, cableLength);
-    };
 
     // Use material requirements store for all calculations
     const materialStore = useMaterialRequirementsStore();
@@ -726,25 +604,14 @@ const CreateQuotePage = () => {
 
                 {sheathGroups.map((sg, idx) => (
                     <SheathComponent
-                        key={sg.id}
+                        key={idx}
                         sheathGroup={sg}
                         index={idx}
+                        cableLength={cableLength}
+                        quotationId={quotationId}
                         cores={cores}
                         sheathGroups={sheathGroups}
-                        onUpdate={updateSheathGroup}
-                        onDelete={deleteSheathGroup}
-                        insulationTypes={insulationTypes}
-                        insulationRawMaterials={insulationRawMaterials}
-                        calculateSheathForGroup={calculateSheathWithContext}
-                        getAvailableCores={getAvailableCores}
-                        getAvailableSheaths={getAvailableSheaths}
-                        processMasterList={processMasterList}
-                        quoteContext={buildSheathContext(sg)}
-                        onAddProcess={(entry) => addSheathProcess(sg.id, entry)}
-                        onRemoveProcess={(processId) => removeSheathProcess(sg.id, processId)}
-                        onUpdateProcessVariable={(processId, varName, value) =>
-                            updateSheathProcessVariable(sg.id, processId, varName, value)
-                        }
+                        onDeleteFromParent={deleteSheathGroup}
                     />
                 ))}
 

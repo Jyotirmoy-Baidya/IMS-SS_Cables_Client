@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Trash2, Zap, Package, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Copy, Minimize2, Maximize2 } from 'lucide-react';
 import {
     calculateWireDimensions,
@@ -76,8 +76,19 @@ const CoreComponent = ({
     onDeleteFromParent,
     onDuplicate
 }) => {
-    // Use provided core or create a default one
-    const initialCore = providedCore || getDefaultCore();
+    // Merge provided core with defaults to ensure all required fields exist
+    const initialCore = useMemo(() => {
+        if (!providedCore) return getDefaultCore();
+
+        return {
+            ...getDefaultCore(providedCore.id),
+            ...providedCore,
+            insulation: {
+                ...getDefaultCore().insulation,
+                ...(providedCore.insulation || {})
+            }
+        };
+    }, [providedCore]);
 
     // Local core state
     const [core, setCore] = useState(initialCore);
@@ -138,10 +149,34 @@ const CoreComponent = ({
 
     const handleInsulationUpdate = (field, value) => {
         setIsSaved(false);
-        setCore(prev => ({
-            ...prev,
-            insulation: { ...prev.insulation, [field]: value }
-        }));
+
+        // Auto-adjust complementary percentage for fresh/reprocess
+        if (field === 'freshPercent') {
+            const freshVal = Math.max(0, Math.min(100, value));
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    freshPercent: freshVal,
+                    reprocessPercent: 100 - freshVal
+                }
+            }));
+        } else if (field === 'reprocessPercent') {
+            const reprocessVal = Math.max(0, Math.min(100, value));
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    reprocessPercent: reprocessVal,
+                    freshPercent: 100 - reprocessVal
+                }
+            }));
+        } else {
+            setCore(prev => ({
+                ...prev,
+                insulation: { ...prev.insulation, [field]: value }
+            }));
+        }
     };
 
     // Save core to backend
@@ -214,11 +249,12 @@ const CoreComponent = ({
         setCore(prev => ({
             ...prev,
             processes: (prev.processes || []).map(p => {
+                console.log("eee", p, varName)
                 if (p.id !== processId) return p;
                 return {
                     ...p,
                     variables: p.variables.map(v =>
-                        v.name === varName ? { ...v, value } : v
+                        v.name == varName ? { ...v, value } : v
                     )
                 };
             })
@@ -829,14 +865,32 @@ const CoreComponent = ({
                                     />
                                 </div>
 
-                                {/* Fresh % */}
-                                <div>
-                                    <FieldLabel>Fresh (%)</FieldLabel>
-                                    <InputField
-                                        type="number"
-                                        value={core.insulation.freshPercent}
-                                        onChange={e => handleInsulationUpdate('freshPercent', parseFloat(e.target.value))}
-                                    />
+                                {/* Fresh % - Auto-adjusts Reprocess % */}
+                                <div className="md:col-span-2">
+                                    <FieldLabel>
+                                        Fresh / Reprocess Mix
+                                        <span className="ml-2 text-emerald-600 font-normal">{core.insulation.freshPercent}% fresh</span>
+                                        <span className="mx-1 text-gray-400">/</span>
+                                        <span className="text-purple-600 font-normal">{core.insulation.reprocessPercent}% reprocess</span>
+                                    </FieldLabel>
+                                    <div className="space-y-2">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={core.insulation.freshPercent}
+                                            onChange={e => handleInsulationUpdate('freshPercent', parseFloat(e.target.value))}
+                                            className="w-full h-2 bg-gradient-to-r from-emerald-200 via-emerald-300 to-purple-300 rounded-lg appearance-none cursor-pointer"
+                                            style={{
+                                                background: `linear-gradient(to right, #10b981 0%, #10b981 ${core.insulation.freshPercent}%, #a855f7 ${core.insulation.freshPercent}%, #a855f7 100%)`
+                                            }}
+                                        />
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-emerald-600 font-medium">100% Fresh</span>
+                                            <span className="text-gray-500">50/50</span>
+                                            <span className="text-purple-600 font-medium">100% Reprocess</span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Reprocess Type */}
@@ -906,17 +960,6 @@ const CoreComponent = ({
                                         placeholder="auto (70% fresh)"
                                         className="border-purple-200"
                                         disabled={!core.insulation.reprocessMaterialId}
-                                    />
-                                </div>
-
-                                {/* Reprocess % */}
-                                <div>
-                                    <FieldLabel>Reprocess (%)</FieldLabel>
-                                    <InputField
-                                        type="number"
-                                        value={core.insulation.reprocessPercent}
-                                        onChange={e => handleInsulationUpdate('reprocessPercent', parseFloat(e.target.value))}
-                                        className="border-purple-200"
                                     />
                                 </div>
 
