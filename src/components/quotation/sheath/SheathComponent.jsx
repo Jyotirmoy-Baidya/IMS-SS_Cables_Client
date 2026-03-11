@@ -631,10 +631,9 @@ const SheathComponent = ({
                             processes={sheath.processes || []}
                             processMasterList={processMasterList}
                             quoteContext={quoteContext}
-                            onAddProcess={addProcess}
-                            onRemoveProcess={removeProcess}
+                            onAdd={addProcess}
+                            onRemove={removeProcess}
                             onUpdateVariable={updateProcessVariable}
-                            loading={loading}
                         />
                     </div>
 

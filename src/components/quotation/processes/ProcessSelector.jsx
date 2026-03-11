@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Plus, Trash2, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 
 const SOURCE_LABELS = {
@@ -87,6 +87,9 @@ const ProcessSelector = ({
 }) => {
     const [showSelector, setShowSelector] = useState(false);
     const [collapsed, setCollapsed] = useState({});
+    const idCounterRef = useRef(0);
+
+
 
     const buildEntry = (master) => {
         const variables = (master.variables || []).map(v => {
@@ -101,7 +104,6 @@ const ProcessSelector = ({
             };
         });
         return {
-            id: Date.now() + Math.random(),
             processId: master._id,
             processName: master.name,
             category: master.category,
@@ -113,7 +115,9 @@ const ProcessSelector = ({
     };
 
     const handleSelectProcess = (master) => {
-        onAdd(buildEntry(master));
+        const entry = buildEntry(master);
+        entry.id = ++idCounterRef.current;
+        onAdd(entry);
         setShowSelector(false);
     };
 
@@ -258,11 +262,10 @@ const ProcessSelector = ({
                                             <div className="mt-2 pt-2 border-t border-gray-100">
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <p className="text-[10px] text-gray-500">Output:</p>
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                                                        proc.output.outputType === 'intermediate'
-                                                            ? 'bg-blue-100 text-blue-700'
-                                                            : 'bg-green-100 text-green-700'
-                                                    }`}>
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${proc.output.outputType === 'intermediate'
+                                                        ? 'bg-blue-100 text-blue-700'
+                                                        : 'bg-green-100 text-green-700'
+                                                        }`}>
                                                         {proc.output.outputType === 'intermediate' ? 'Intermediate' : 'Final'}
                                                     </span>
                                                 </div>

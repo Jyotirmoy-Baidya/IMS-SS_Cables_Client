@@ -45,6 +45,7 @@ const SelectField = ({ className = '', children, ...props }) => (
 const getDefaultCore = (id) => ({
     id: id || Date.now(),
     materialTypeId: null,
+    materialTypeName: '',
     materialId: null,
     materialDensity: 8.96,
     totalCoreArea: 8,
@@ -52,6 +53,7 @@ const getDefaultCore = (id) => ({
     wastagePercent: 5,
     selectedRod: null,
     hasAnnealing: false,
+    hasInsulation: false,
     coreLength: null,
     insulation: {
         materialTypeId: null,
@@ -147,6 +149,31 @@ const CoreComponent = ({
         setCore(prev => ({ ...prev, [field]: value }));
     };
 
+    // Toggle insulation on/off
+    const handleInsulationToggle = (enabled) => {
+        setIsSaved(false);
+        if (!enabled) {
+            // Clear insulation data when disabling
+            setCore(prev => ({
+                ...prev,
+                hasInsulation: false,
+                insulation: {
+                    materialTypeId: null,
+                    materialTypeName: '',
+                    materialId: null,
+                    reprocessMaterialId: null,
+                    thickness: 1,
+                    density: 1.4,
+                    freshPercent: 100,
+                    reprocessPercent: 0,
+                    wastagePercent: 5
+                }
+            }));
+        } else {
+            setCore(prev => ({ ...prev, hasInsulation: true }));
+        }
+    };
+
     const handleInsulationUpdate = (field, value) => {
         setIsSaved(false);
 
@@ -185,7 +212,7 @@ const CoreComponent = ({
             alert('No quotation ID found. Please refresh the page.');
             return;
         }
-
+        console.log(core);
         setIsSaving(true);
         try {
             let response;
@@ -249,12 +276,11 @@ const CoreComponent = ({
         setCore(prev => ({
             ...prev,
             processes: (prev.processes || []).map(p => {
-                console.log("eee", p, varName)
                 if (p.id !== processId) return p;
                 return {
                     ...p,
                     variables: p.variables.map(v =>
-                        v.name == varName ? { ...v, value } : v
+                        v.name === varName ? { ...v, value } : v
                     )
                 };
             })
@@ -276,15 +302,24 @@ const CoreComponent = ({
     };
 
     const handleMaterialTypeSelect = (typeId) => {
+        setIsSaved(false);
         if (!typeId) {
-            handleCoreUpdate('materialTypeId', null);
-            handleCoreUpdate('materialDensity', 8.96);
+            setCore(prev => ({
+                ...prev,
+                materialTypeId: null,
+                materialTypeName: '',
+                materialDensity: 8.96
+            }));
             return;
         }
         const type = metalTypes.find(t => t._id === typeId);
         if (!type) return;
-        handleCoreUpdate('materialTypeId', typeId);
-        handleCoreUpdate('materialDensity', type.density || 8.96);
+        setCore(prev => ({
+            ...prev,
+            materialTypeId: typeId,
+            materialTypeName: type.name,
+            materialDensity: type.density || 8.96
+        }));
     };
 
     const handleRodSelect = (rod) => {
@@ -799,215 +834,234 @@ const CoreComponent = ({
 
                     {/* ── Section 3: Insulation ── */}
                     <div className="border border-teal-200 rounded-xl overflow-hidden">
-                        <div className="flex items-center gap-2 px-4 py-2.5 bg-teal-50">
-                            <Layers size={14} className="text-teal-600" />
-                            <span className="text-sm font-bold text-gray-700">Insulation</span>
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-teal-50">
+                            <div className="flex items-center gap-2">
+                                <Layers size={14} className="text-teal-600" />
+                                <span className="text-sm font-bold text-gray-700">Insulation</span>
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={core.hasInsulation || false}
+                                    onChange={e => handleInsulationToggle(e.target.checked)}
+                                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                                />
+                                <span className="text-xs font-medium text-gray-600">Add Insulation</span>
+                            </label>
                         </div>
 
-                        <div className="px-4 pt-3 pb-4 bg-white space-y-3">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {/* Fresh Type */}
-                                <div className="md:col-span-2">
-                                    <FieldLabel>Fresh Material Type</FieldLabel>
-                                    <SelectField
-                                        value={core.insulation.materialTypeId || ''}
-                                        onChange={e => handleInsulationTypeSelect(e.target.value)}
-                                    >
-                                        <option value="">— Select Fresh Insulation —</option>
-                                        {insulationTypes.map(type => (
-                                            <option key={type._id} value={type._id}>
-                                                {type.name} (ρ = {type.density} g/cm³)
-                                            </option>
-                                        ))}
-                                    </SelectField>
-                                    {insulationTypes.length === 0 && (
-                                        <p className="text-xs text-orange-500 mt-1">No insulation types found.</p>
-                                    )}
-                                </div>
-
-                                {/* Fresh Raw Material */}
-                                <div className="md:col-span-2">
-                                    <FieldLabel>Fresh Raw Material</FieldLabel>
-                                    <SelectField
-                                        value={core.insulation.materialId || ''}
-                                        onChange={e => handleInsulationMaterialSelect(e.target.value)}
-                                        disabled={!core.insulation.materialTypeId}
-                                    >
-                                        <option value="">— Select Raw Material —</option>
-                                        {filteredInsulationMaterials.map(mat => (
-                                            <option key={mat._id} value={mat._id}>
-                                                {mat.name} | Code: {mat.materialCode} | Stock: {mat.inventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.inventory?.avgPricePerKg?.toFixed(2) || 0}/kg
-                                            </option>
-                                        ))}
-                                    </SelectField>
-                                    {!core.insulation.materialTypeId && (
-                                        <p className="text-xs text-gray-400 mt-1">Select material type first</p>
-                                    )}
-                                    {core.insulation.materialTypeId && filteredInsulationMaterials.length === 0 && (
-                                        <p className="text-xs text-orange-500 mt-1">No raw materials found for this type</p>
-                                    )}
-                                </div>
-
-                                {/* Fresh Price */}
-                                <div>
-                                    <FieldLabel>
-                                        Fresh Price/kg (₹)
-                                        {core.insulation.freshPricePerKg > 0 && (
-                                            <span className="ml-1 text-emerald-500 normal-case font-normal">(stock avg)</span>
+                        {core.hasInsulation && (
+                            <div className="px-4 pt-3 pb-4 bg-white space-y-3">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {/* Fresh Type */}
+                                    <div className="md:col-span-2">
+                                        <FieldLabel>Fresh Material Type</FieldLabel>
+                                        <SelectField
+                                            value={core.insulation.materialTypeId || ''}
+                                            onChange={e => handleInsulationTypeSelect(e.target.value)}
+                                        >
+                                            <option value="">— Select Fresh Insulation —</option>
+                                            {insulationTypes.map(type => (
+                                                <option key={type._id} value={type._id}>
+                                                    {type.name} (ρ = {type.density} g/cm³)
+                                                </option>
+                                            ))}
+                                        </SelectField>
+                                        {insulationTypes.length === 0 && (
+                                            <p className="text-xs text-orange-500 mt-1">No insulation types found.</p>
                                         )}
-                                    </FieldLabel>
-                                    <InputField
-                                        type="number" step="0.01"
-                                        value={core.insulation.freshPricePerKg || ''}
-                                        onChange={e => handleInsulationUpdate('freshPricePerKg', parseFloat(e.target.value) || 0)}
-                                        placeholder="0.00"
-                                        disabled={!core.insulation.materialId}
-                                    />
-                                </div>
+                                    </div>
 
-                                {/* Fresh % - Auto-adjusts Reprocess % */}
-                                <div className="md:col-span-2">
-                                    <FieldLabel>
-                                        Fresh / Reprocess Mix
-                                        <span className="ml-2 text-emerald-600 font-normal">{core.insulation.freshPercent}% fresh</span>
-                                        <span className="mx-1 text-gray-400">/</span>
-                                        <span className="text-purple-600 font-normal">{core.insulation.reprocessPercent}% reprocess</span>
-                                    </FieldLabel>
-                                    <div className="space-y-2">
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="100"
-                                            value={core.insulation.freshPercent}
-                                            onChange={e => handleInsulationUpdate('freshPercent', parseFloat(e.target.value))}
-                                            className="w-full h-2 bg-gradient-to-r from-emerald-200 via-emerald-300 to-purple-300 rounded-lg appearance-none cursor-pointer"
-                                            style={{
-                                                background: `linear-gradient(to right, #10b981 0%, #10b981 ${core.insulation.freshPercent}%, #a855f7 ${core.insulation.freshPercent}%, #a855f7 100%)`
-                                            }}
+                                    {/* Fresh Raw Material */}
+                                    <div className="md:col-span-2">
+                                        <FieldLabel>Fresh Raw Material</FieldLabel>
+                                        <SelectField
+                                            value={core.insulation.materialId || ''}
+                                            onChange={e => handleInsulationMaterialSelect(e.target.value)}
+                                            disabled={!core.insulation.materialTypeId}
+                                        >
+                                            <option value="">— Select Raw Material —</option>
+                                            {filteredInsulationMaterials.map(mat => (
+                                                <option key={mat._id} value={mat._id}>
+                                                    {mat.name} | Code: {mat.materialCode} | Stock: {mat.inventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.inventory?.avgPricePerKg?.toFixed(2) || 0}/kg
+                                                </option>
+                                            ))}
+                                        </SelectField>
+                                        {!core.insulation.materialTypeId && (
+                                            <p className="text-xs text-gray-400 mt-1">Select material type first</p>
+                                        )}
+                                        {core.insulation.materialTypeId && filteredInsulationMaterials.length === 0 && (
+                                            <p className="text-xs text-orange-500 mt-1">No raw materials found for this type</p>
+                                        )}
+                                    </div>
+
+                                    {/* Fresh Price */}
+                                    <div>
+                                        <FieldLabel>
+                                            Fresh Price/kg (₹)
+                                            {core.insulation.freshPricePerKg > 0 && (
+                                                <span className="ml-1 text-emerald-500 normal-case font-normal">(stock avg)</span>
+                                            )}
+                                        </FieldLabel>
+                                        <InputField
+                                            type="number" step="0.01"
+                                            value={core.insulation.freshPricePerKg || ''}
+                                            onChange={e => handleInsulationUpdate('freshPricePerKg', parseFloat(e.target.value) || 0)}
+                                            placeholder="0.00"
+                                            disabled={!core.insulation.materialId}
                                         />
-                                        <div className="flex justify-between text-xs">
-                                            <span className="text-emerald-600 font-medium">100% Fresh</span>
-                                            <span className="text-gray-500">50/50</span>
-                                            <span className="text-purple-600 font-medium">100% Reprocess</span>
+                                    </div>
+
+                                    {/* Fresh % - Auto-adjusts Reprocess % */}
+                                    <div className="md:col-span-2">
+                                        <FieldLabel>
+                                            Fresh / Reprocess Mix
+                                            <span className="ml-2 text-emerald-600 font-normal">{core.insulation.freshPercent}% fresh</span>
+                                            <span className="mx-1 text-gray-400">/</span>
+                                            <span className="text-purple-600 font-normal">{core.insulation.reprocessPercent}% reprocess</span>
+                                        </FieldLabel>
+                                        <div className="space-y-2">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="100"
+                                                value={core.insulation.freshPercent}
+                                                onChange={e => handleInsulationUpdate('freshPercent', parseFloat(e.target.value))}
+                                                className="w-full h-2 bg-gradient-to-r from-emerald-200 via-emerald-300 to-purple-300 rounded-lg appearance-none cursor-pointer"
+                                                style={{
+                                                    background: `linear-gradient(to right, #10b981 0%, #10b981 ${core.insulation.freshPercent}%, #a855f7 ${core.insulation.freshPercent}%, #a855f7 100%)`
+                                                }}
+                                            />
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-emerald-600 font-medium">100% Fresh</span>
+                                                <span className="text-gray-500">50/50</span>
+                                                <span className="text-purple-600 font-medium">100% Reprocess</span>
+                                            </div>
                                         </div>
+                                    </div>
+
+                                    {/* Reprocess Type */}
+                                    <div className="md:col-span-2">
+                                        <FieldLabel>
+                                            Reprocess Type
+                                            <span className="ml-1 text-gray-400 normal-case font-normal">(optional — can differ)</span>
+                                        </FieldLabel>
+                                        <SelectField
+                                            value={core.insulation.reprocessMaterialTypeId || ''}
+                                            onChange={e => handleReprocessTypeSelect(e.target.value)}
+                                            className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
+                                        >
+                                            <option value="">— Same as fresh / select reprocess type —</option>
+                                            {insulationTypes.map(type => (
+                                                <option key={type._id} value={type._id}>
+                                                    {type.name} (ρ = {type.density} g/cm³)
+                                                </option>
+                                            ))}
+                                        </SelectField>
+                                        {core.insulation.reprocessMaterialTypeId && (
+                                            <p className="text-xs text-purple-600 mt-1">
+                                                Reprocess stock: <strong>{core.insulation.reprocessMaterialTypeName}</strong>
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Reprocess Raw Material */}
+                                    <div className="md:col-span-2">
+                                        <FieldLabel>
+                                            Reprocess Raw Material
+                                            <span className="ml-1 text-gray-400 normal-case font-normal">(optional)</span>
+                                        </FieldLabel>
+                                        <SelectField
+                                            value={core.insulation.reprocessMaterialId || ''}
+                                            onChange={e => handleReprocessMaterialSelect(e.target.value)}
+                                            disabled={!core.insulation.reprocessMaterialTypeId}
+                                            className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
+                                        >
+                                            <option value="">— Select Reprocess Raw Material —</option>
+                                            {filteredReprocessMaterials.map(mat => (
+                                                <option key={mat._id} value={mat._id}>
+                                                    {mat.name} | Code: {mat.materialCode} | Reprocess: {mat.reprocessInventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.reprocessInventory?.pricePerKg?.toFixed(2) || 0}/kg
+                                                </option>
+                                            ))}
+                                        </SelectField>
+                                        {!core.insulation.reprocessMaterialTypeId && (
+                                            <p className="text-xs text-gray-400 mt-1">Select reprocess type first</p>
+                                        )}
+                                        {core.insulation.reprocessMaterialTypeId && filteredReprocessMaterials.length === 0 && (
+                                            <p className="text-xs text-orange-500 mt-1">No reprocess materials found for this type</p>
+                                        )}
+                                    </div>
+
+                                    {/* Reprocess Price */}
+                                    <div>
+                                        <FieldLabel>
+                                            Reprocess Price/kg (₹)
+                                            {core.insulation.reprocessPricePerKg > 0 && (
+                                                <span className="ml-1 text-purple-500 normal-case font-normal">(stock)</span>
+                                            )}
+                                        </FieldLabel>
+                                        <InputField
+                                            type="number" step="0.01"
+                                            value={core.insulation.reprocessPricePerKg || ''}
+                                            onChange={e => handleInsulationUpdate('reprocessPricePerKg', parseFloat(e.target.value) || 0)}
+                                            placeholder="auto (70% fresh)"
+                                            className="border-purple-200"
+                                            disabled={!core.insulation.reprocessMaterialId}
+                                        />
+                                    </div>
+
+                                    {/* Thickness */}
+                                    <div>
+                                        <FieldLabel>Thickness (mm)</FieldLabel>
+                                        <InputField
+                                            type="number" step="0.1"
+                                            value={core.insulation.thickness}
+                                            onChange={e => handleInsulationUpdate('thickness', parseFloat(e.target.value))}
+                                        />
+                                    </div>
+
+                                    {/* Wastage % */}
+                                    <div>
+                                        <FieldLabel>Wastage (%)</FieldLabel>
+                                        <InputField
+                                            type="number" step="0.1" min="0" max="100"
+                                            value={core.insulation.wastagePercent || 0}
+                                            onChange={e => handleInsulationUpdate('wastagePercent', parseFloat(e.target.value) || 0)}
+                                            placeholder="0"
+                                        />
                                     </div>
                                 </div>
 
-                                {/* Reprocess Type */}
-                                <div className="md:col-span-2">
-                                    <FieldLabel>
-                                        Reprocess Type
-                                        <span className="ml-1 text-gray-400 normal-case font-normal">(optional — can differ)</span>
-                                    </FieldLabel>
-                                    <SelectField
-                                        value={core.insulation.reprocessMaterialTypeId || ''}
-                                        onChange={e => handleReprocessTypeSelect(e.target.value)}
-                                        className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
-                                    >
-                                        <option value="">— Same as fresh / select reprocess type —</option>
-                                        {insulationTypes.map(type => (
-                                            <option key={type._id} value={type._id}>
-                                                {type.name} (ρ = {type.density} g/cm³)
-                                            </option>
-                                        ))}
-                                    </SelectField>
-                                    {core.insulation.reprocessMaterialTypeId && (
-                                        <p className="text-xs text-purple-600 mt-1">
-                                            Reprocess stock: <strong>{core.insulation.reprocessMaterialTypeName}</strong>
+                                {/* Insulation results */}
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                                    <StatBox label="Insulated Dia" value={`${insulationCalc.insulatedDiameter} mm`} accent />
+                                    <StatBox label="Fresh Weight" value={`${insulationCalc.freshWeight} kg`} />
+                                    <StatBox label="Reprocess Weight" value={`${insulationCalc.reprocessWeight} kg`} />
+                                    <StatBox label="Fresh Cost" value={fmtCur(insulationCalc.freshCost)} />
+                                    <StatBox label="Reprocess Cost" value={fmtCur(insulationCalc.reprocessCost)} />
+                                    <StatBox label="Insulation Total" value={fmtCur(insulationCalc.totalCost)} accent />
+                                </div>
+
+                                <div className="flex gap-2 pt-1 border-t border-gray-100">
+                                    <div className="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                                        <p className="text-xs text-gray-400">Core Area</p>
+                                        <p className="text-sm font-bold text-gray-700">{fmtN(core.totalCoreArea, 2)} mm²</p>
+                                    </div>
+                                    <div className="flex-1 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                                        <p className="text-xs text-teal-500">Outer Area</p>
+                                        <p className="text-sm font-bold text-teal-700">
+                                            {calculateOuterArea(insulationCalc.insulatedDiameter).toFixed(2)} mm²
                                         </p>
-                                    )}
-                                </div>
-
-                                {/* Reprocess Raw Material */}
-                                <div className="md:col-span-2">
-                                    <FieldLabel>
-                                        Reprocess Raw Material
-                                        <span className="ml-1 text-gray-400 normal-case font-normal">(optional)</span>
-                                    </FieldLabel>
-                                    <SelectField
-                                        value={core.insulation.reprocessMaterialId || ''}
-                                        onChange={e => handleReprocessMaterialSelect(e.target.value)}
-                                        disabled={!core.insulation.reprocessMaterialTypeId}
-                                        className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
-                                    >
-                                        <option value="">— Select Reprocess Raw Material —</option>
-                                        {filteredReprocessMaterials.map(mat => (
-                                            <option key={mat._id} value={mat._id}>
-                                                {mat.name} | Code: {mat.materialCode} | Reprocess: {mat.reprocessInventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.reprocessInventory?.pricePerKg?.toFixed(2) || 0}/kg
-                                            </option>
-                                        ))}
-                                    </SelectField>
-                                    {!core.insulation.reprocessMaterialTypeId && (
-                                        <p className="text-xs text-gray-400 mt-1">Select reprocess type first</p>
-                                    )}
-                                    {core.insulation.reprocessMaterialTypeId && filteredReprocessMaterials.length === 0 && (
-                                        <p className="text-xs text-orange-500 mt-1">No reprocess materials found for this type</p>
-                                    )}
-                                </div>
-
-                                {/* Reprocess Price */}
-                                <div>
-                                    <FieldLabel>
-                                        Reprocess Price/kg (₹)
-                                        {core.insulation.reprocessPricePerKg > 0 && (
-                                            <span className="ml-1 text-purple-500 normal-case font-normal">(stock)</span>
-                                        )}
-                                    </FieldLabel>
-                                    <InputField
-                                        type="number" step="0.01"
-                                        value={core.insulation.reprocessPricePerKg || ''}
-                                        onChange={e => handleInsulationUpdate('reprocessPricePerKg', parseFloat(e.target.value) || 0)}
-                                        placeholder="auto (70% fresh)"
-                                        className="border-purple-200"
-                                        disabled={!core.insulation.reprocessMaterialId}
-                                    />
-                                </div>
-
-                                {/* Thickness */}
-                                <div>
-                                    <FieldLabel>Thickness (mm)</FieldLabel>
-                                    <InputField
-                                        type="number" step="0.1"
-                                        value={core.insulation.thickness}
-                                        onChange={e => handleInsulationUpdate('thickness', parseFloat(e.target.value))}
-                                    />
-                                </div>
-
-                                {/* Wastage % */}
-                                <div>
-                                    <FieldLabel>Wastage (%)</FieldLabel>
-                                    <InputField
-                                        type="number" step="0.1" min="0" max="100"
-                                        value={core.insulation.wastagePercent || 0}
-                                        onChange={e => handleInsulationUpdate('wastagePercent', parseFloat(e.target.value) || 0)}
-                                        placeholder="0"
-                                    />
+                                    </div>
                                 </div>
                             </div>
+                        )}
 
-                            {/* Insulation results */}
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-1">
-                                <StatBox label="Insulated Dia" value={`${insulationCalc.insulatedDiameter} mm`} accent />
-                                <StatBox label="Fresh Weight" value={`${insulationCalc.freshWeight} kg`} />
-                                <StatBox label="Reprocess Weight" value={`${insulationCalc.reprocessWeight} kg`} />
-                                <StatBox label="Fresh Cost" value={fmtCur(insulationCalc.freshCost)} />
-                                <StatBox label="Reprocess Cost" value={fmtCur(insulationCalc.reprocessCost)} />
-                                <StatBox label="Insulation Total" value={fmtCur(insulationCalc.totalCost)} accent />
+                        {!core.hasInsulation && (
+                            <div className="px-4 py-8 bg-white text-center">
+                                <p className="text-sm text-gray-400">Check "Add Insulation" above to configure insulation for this core</p>
                             </div>
-
-                            <div className="flex gap-2 pt-1 border-t border-gray-100">
-                                <div className="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-                                    <p className="text-xs text-gray-400">Core Area</p>
-                                    <p className="text-sm font-bold text-gray-700">{fmtN(core.totalCoreArea, 2)} mm²</p>
-                                </div>
-                                <div className="flex-1 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
-                                    <p className="text-xs text-teal-500">Outer Area</p>
-                                    <p className="text-sm font-bold text-teal-700">
-                                        {calculateOuterArea(insulationCalc.insulatedDiameter).toFixed(2)} mm²
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Process Selector for this Core */}
