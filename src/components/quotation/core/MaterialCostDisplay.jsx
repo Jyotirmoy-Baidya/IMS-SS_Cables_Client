@@ -26,7 +26,6 @@ const MaterialCostDisplay = ({ materialId, weight = 0, type = 'fresh', variant =
             setError(null);
             try {
                 const response = await api.get(`/raw-material/get-one-material/${materialId}`);
-                console.log(response.data);
                 setMaterial(response.data);
             } catch (err) {
                 console.error('Error fetching material:', err);
@@ -85,7 +84,7 @@ const MaterialCostDisplay = ({ materialId, weight = 0, type = 'fresh', variant =
 
     // Full variant - show details
     return (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-0.5 w-full">
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
                 <DollarSign size={12} className="text-blue-500" />
                 <span>{material.name}</span>

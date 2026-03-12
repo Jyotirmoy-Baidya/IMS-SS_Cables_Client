@@ -23,7 +23,6 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
             // (materialRequired arrays are pre-calculated on backend when quotation is saved)
             const requirements = await calculateAll(quotation);
 
-            console.log("Material requirements:", requirements);
 
             if (requirements.length === 0) {
                 setError('No materials found in quotation');

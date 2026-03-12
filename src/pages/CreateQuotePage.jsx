@@ -157,22 +157,7 @@ const CreateQuotePage = () => {
         const coreToDuplicate = cores.find(c => c.id === id);
         if (!coreToDuplicate) return;
 
-        const newId = Math.max(...cores.map(c => c.id), 0) + 1;
-        const duplicatedCore = {
-            ...coreToDuplicate,
-            id: newId,
-            _id: undefined, // Clear backend ID so it's treated as new
-            // Deep copy insulation object
-            insulation: { ...coreToDuplicate.insulation },
-            // Deep copy processes array
-            processes: (coreToDuplicate.processes || []).map(p => ({
-                ...p,
-                id: `${p.processId}_${newId}_${Date.now()}`, // Generate new unique ID for process entry
-                variables: p.variables.map(v => ({ ...v }))
-            }))
-        };
-
-        setCores([...cores, duplicatedCore]);
+        addCore();
     };
 
     // Sheath management

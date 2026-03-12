@@ -155,7 +155,6 @@ export const calculateInsulation = (
   const effectiveReprocessPrice = (reprocessPricePerKg != null && reprocessPricePerKg > 0)
     ? reprocessPricePerKg
     : freshPricePerKg * 0.7;
-  console.log("fresh weight1", reprocessWeight, reprocessPercent);
   const freshCost = freshWeight * freshPricePerKg;
   const reprocessCost = reprocessWeight * effectiveReprocessPrice;
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../../../utils/axiosInstance.js';
+import api from '../../../api/axiosInstance.js';
 
 const FieldLabel = ({ children }) => (
     <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">
@@ -34,7 +34,7 @@ const InsulationSelector = ({ core, onUpdate }) => {
         const fetchInsulationTypes = async () => {
             try {
                 setLoading(true);
-                const response = await api.get('/raw-material-type/get-all-types?category=plastic,insulation');
+                const response = await api.get('/material-type/get-all-material-types?category=plastic,insulation');
                 setInsulationTypes(response.data || []);
             } catch (error) {
                 console.error('Error fetching insulation types:', error);
@@ -42,6 +42,7 @@ const InsulationSelector = ({ core, onUpdate }) => {
                 setLoading(false);
             }
         };
+
 
         fetchInsulationTypes();
     }, []);

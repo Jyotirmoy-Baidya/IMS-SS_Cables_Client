@@ -89,9 +89,6 @@ const ProcessSelector = ({
     const [collapsed, setCollapsed] = useState({});
     const idCounterRef = useRef(0);
 
-    console.log(quoteContext);
-
-    console.log(processMasterList[0]);
 
     const buildEntry = (master) => {
         const variables = (master.variables || []).map(v => {

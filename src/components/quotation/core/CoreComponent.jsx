@@ -8,11 +8,15 @@ import {
     calculateInsulation,
     calculateOuterArea
 } from '../../../utils/cableCalculations';
-import ProcessSelector from '../processes/ProcessSelector';
+// import ProcessSelector from '../processes/ProcessSelector'; // Replaced with ProcessEntryEditor
+import ProcessEntryEditor from '../process/ProcessEntryEditor';
+import ProcessEntryList from '../process/ProcessEntryList';
 import SelectedRawMaterialCard from './SelectedRawMaterialCard.jsx';
 import RawMaterialSelector from './RawMaterialSelector.jsx';
+import InsulationSelector from '../insulation/InsulationSelector.jsx';
 import api from '../../../api/axiosInstance';
 import MaterialCostDisplay from './MaterialCostDisplay.jsx';
+import useMaterialRequirementsStore from '../../../store/materialRequirementsStore.js';
 
 const fmtN = (n, d = 3) => Number(n || 0).toFixed(d);
 const fmtCur = (n) => '₹' + Number(n || 0).toFixed(2);
@@ -103,29 +107,25 @@ const CoreComponent = ({
 
     // Material data
     const [metalTypes, setMetalTypes] = useState([]);
-    const [insulationTypes, setInsulationTypes] = useState([]);
-    const [insulationRawMaterials, setInsulationRawMaterials] = useState([]);
-    const [processMasterList, setProcessMasterList] = useState([]);
+    // const [processMasterList, setProcessMasterList] = useState([]); // Removed - now fetched in ProcessEntryEditor
     const [loading, setLoading] = useState(true);
 
+    // Process entries state
+    const [processEntries, setProcessEntries] = useState([]);
+    const [showProcessEditor, setShowProcessEditor] = useState(false);
+    const [loadingProcesses, setLoadingProcesses] = useState(false);
 
-    // Fetch materials and processes on mount
+    const { calculateAll } = useMaterialRequirementsStore();
+
+
+    // Fetch materials on mount
     useEffect(() => {
         const fetchMaterials = async () => {
             try {
-                const [typesRes, metalMatRes, insulMatRes, processRes] = await Promise.all([
-                    api.get('/material-type/get-all-material-types'),
-                    api.get('/raw-material/get-all-materials?category=metal'),
-                    api.get('/raw-material/get-all-materials'),
-                    api.get('/process/get-all-processes?isActive=true')
-                ]);
+                const typesRes = await api.get('/material-type/get-all-material-types');
 
                 const allTypes = typesRes.data || [];
                 setMetalTypes(allTypes.filter(t => t.category === 'metal'));
-                setInsulationTypes(allTypes.filter(t => t.category === 'insulation' || t.category === 'plastic'));
-                const allMats = insulMatRes.data || [];
-                setInsulationRawMaterials(allMats.filter(m => m.category === 'insulation' || m.category === 'plastic'));
-                setProcessMasterList(processRes.data || []);
             } catch (err) {
                 console.error('Failed to fetch materials:', err);
             } finally {
@@ -188,37 +188,6 @@ const CoreComponent = ({
         }
     };
 
-    const handleInsulationUpdate = (field, value) => {
-        setIsSaved(false);
-
-        // Auto-adjust complementary percentage for fresh/reprocess
-        if (field === 'freshPercent') {
-            const freshVal = Math.max(0, Math.min(100, value));
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    freshPercent: freshVal,
-                    reprocessPercent: 100 - freshVal
-                }
-            }));
-        } else if (field === 'reprocessPercent') {
-            const reprocessVal = Math.max(0, Math.min(100, value));
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    reprocessPercent: reprocessVal,
-                    freshPercent: 100 - reprocessVal
-                }
-            }));
-        } else {
-            setCore(prev => ({
-                ...prev,
-                insulation: { ...prev.insulation, [field]: value }
-            }));
-        }
-    };
 
     // Recalculate dimensions whenever relevant fields change
     useEffect(() => {
@@ -428,7 +397,8 @@ const CoreComponent = ({
                     totalMaterialCost: parseFloat(materialRequired.reduce((sum, req) => sum + (req.totalCost || 0), 0).toFixed(2)),
                     totalProcessCost: 0,
                     grandTotal: parseFloat(materialRequired.reduce((sum, req) => sum + (req.totalCost || 0), 0).toFixed(2))
-                }
+                },
+                coreOuterAreaWithInsulation: calculateOuterArea(core.conductor.conductorDiameter + (core.insulation?.thickness || 0) + (core.insulation?.thickness || 0)).toFixed(2)
             };
 
             let response;
@@ -442,6 +412,7 @@ const CoreComponent = ({
 
             // Update local state with backend response
             setCore(response.data);
+            calculateAll(quotationId);
             setIsSaved(true);
         } catch (error) {
             console.error('Failed to save core:', error);
@@ -470,38 +441,67 @@ const CoreComponent = ({
         }
     };
 
-    // Process management
-    const addProcess = (entry) => {
-        setIsSaved(false);
-        setCore(prev => ({
-            ...prev,
-            processes: [...(prev.processes || []), entry]
-        }));
+    // Fetch process entries from backend
+    const fetchProcessEntries = async () => {
+        if (!core._id) return;
+
+        try {
+            setLoadingProcesses(true);
+            const response = await api.get(`/process-entry/get-by-parent?coreId=${core._id}`);
+            setProcessEntries(response.data || []);
+        } catch (error) {
+            console.error('Error fetching process entries:', error);
+        } finally {
+            setLoadingProcesses(false);
+        }
     };
 
-    const removeProcess = (processId) => {
-        setIsSaved(false);
-        setCore(prev => ({
-            ...prev,
-            processes: (prev.processes || []).filter(p => p.id !== processId)
-        }));
+    // Fetch process entries when core ID changes
+    useEffect(() => {
+        if (core._id) {
+            fetchProcessEntries();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [core._id]);
+
+    // Handle process entry save
+    const handleProcessSave = (savedEntry) => {
+        setProcessEntries(prev => [...prev, savedEntry]);
+        setShowProcessEditor(false);
     };
 
-    const updateProcessVariable = (processId, varName, value) => {
-        setIsSaved(false);
-        setCore(prev => ({
-            ...prev,
-            processes: (prev.processes || []).map(p => {
-                if (p.id !== processId) return p;
-                return {
-                    ...p,
-                    variables: p.variables.map(v =>
-                        v.name === varName ? { ...v, value } : v
-                    )
-                };
-            })
-        }));
+    // Delete process entry
+    const deleteProcessEntry = async (entryId) => {
+        if (!window.confirm('Delete this process entry?')) return;
+
+        try {
+            await api.delete(`/process-entry/delete-process-entry/${entryId}`);
+            setProcessEntries(prev => prev.filter(e => e._id !== entryId));
+        } catch (error) {
+            console.error('Error deleting process entry:', error);
+            alert('Failed to delete process entry');
+        }
     };
+
+    // Build context for ProcessEntryEditor
+    const buildProcessContext = () => {
+        return {
+            wireCount: core.conductor?.wireCount || 0,
+            wireDiameter: core.conductor?.wireDiameter || 0,
+            totalCoreArea: core.conductor?.totalCoreArea || 0,
+            conductorDiameter: core.conductor?.conductorDiameter || 0,
+            drawingLength: core.conductor?.drawingLength || 0,
+            materialWeight: core.conductor?.materialWeight || 0,
+            thickness: core.insulation?.thickness || 0,
+            freshWeight: core.insulation?.freshWeight || 0,
+            reprocessWeight: core.insulation?.reprocessWeight || 0,
+            insulatedDiameter: core.insulation?.insulatedDiameter || 0,
+            coreLength: core.coreLength || cableLength || 0
+        };
+    };
+
+    // OLD FUNCTIONS REMOVED - Now using ProcessEntry API
+    // const addProcess, removeProcess, updateProcessVariable - replaced by ProcessEntryEditor
 
 
 
@@ -520,7 +520,6 @@ const CoreComponent = ({
         }
         const type = metalTypes.find(t => t._id === typeId);
         if (!type) return;
-        console.log("type", type);
         setCore(prev => ({
             ...prev,
             conductor: {
@@ -550,136 +549,6 @@ const CoreComponent = ({
         setShowRodSelection(false);
     };
 
-    const handleInsulationTypeSelect = (typeId) => {
-        setIsSaved(false);
-        if (!typeId) {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    freshMaterialTypeId: null,
-                    freshMaterialId: null,
-                    freshDensity: null
-                }
-            }));
-            return;
-        }
-        const type = insulationTypes.find(t => t._id === typeId);
-        if (!type) return;
-        if (core?.insulation?.reprocessMaterialTypeId) {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    freshMaterialTypeId: typeId,
-                    freshMaterialId: null,
-                    freshDensity: type.density
-                }
-            }));
-        }
-        else {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    freshMaterialTypeId: typeId,
-                    freshMaterialId: null,
-                    freshDensity: type.density,
-                    reprocessMaterialTypeId: typeId,
-                    reprocessMaterialId: null,
-                    reprocessDensity: type.density
-                }
-            }));
-        }
-    };
-
-    const handleInsulationMaterialSelect = (materialId) => {
-        setIsSaved(false);
-        if (!materialId) {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    freshMaterialId: null,
-                    freshDensity: null
-                }
-            }));
-            return;
-        }
-        const material = insulationRawMaterials.find(m => m._id === materialId);
-        if (!material) return;
-        if (core?.insulation?.reprocessMaterialId) {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    freshMaterialId: material._id
-                }
-            }));
-        }
-        else {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    freshMaterialId: material._id,
-                    reprocessMaterialId: material._id,
-                }
-            }));
-        }
-    };
-
-    const handleReprocessTypeSelect = (typeId) => {
-        setIsSaved(false);
-        if (!typeId) {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    reprocessMaterialTypeId: null,
-                    reprocessMaterialId: null,
-                    reprocessDensity: 0
-                }
-            }));
-            return;
-        }
-        const type = insulationTypes.find(t => t._id === typeId);
-        if (!type) return;
-        setCore(prev => ({
-            ...prev,
-            insulation: {
-                ...prev.insulation,
-                reprocessMaterialTypeId: typeId,
-                reprocessMaterialId: null,
-                reprocessDensity: type.density || 1.4
-            }
-        }));
-    };
-
-    const handleReprocessMaterialSelect = (materialId) => {
-        setIsSaved(false);
-        if (!materialId) {
-            setCore(prev => ({
-                ...prev,
-                insulation: {
-                    ...prev.insulation,
-                    reprocessMaterialId: null,
-                    reprocessDensity: 0
-                }
-            }));
-            return;
-        }
-        const material = insulationRawMaterials.find(m => m._id === materialId);
-        if (!material) return;
-        setCore(prev => ({
-            ...prev,
-            insulation: {
-                ...prev.insulation,
-                reprocessMaterialId: material._id,
-                reprocessDensity: material.specifications?.density || 1.4
-            }
-        }));
-    };
 
     // Calculations - use core length if set, otherwise cable length
     const effectiveCoreLength = core.coreLength ?? cableLength;
@@ -706,19 +575,6 @@ const CoreComponent = ({
         core.insulation?.wastagePercent || 0
     );
 
-    const filteredInsulationMaterials = core.insulation?.freshMaterialTypeId
-        ? insulationRawMaterials.filter(m => {
-            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === core.insulation.freshMaterialTypeId;
-        })
-        : [];
-
-    const filteredReprocessMaterials = core.insulation?.reprocessMaterialTypeId
-        ? insulationRawMaterials.filter(m => {
-            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === core.insulation.reprocessMaterialTypeId;
-        })
-        : [];
 
     const selectedTypeName = metalTypes.find(t => t._id === core.conductor?.materialTypeId)?.name || null;
 
@@ -738,46 +594,7 @@ const CoreComponent = ({
         }
     }, 0);
 
-    const [coreContext, setCoreContext] = useState({});
-
-    useEffect(() => {
-        setCoreContext({
-            cableLength,
-            coreArea: core.conductor?.totalCoreArea || 0,
-            wireCount: core.conductor?.wireCount || 1,
-            coreDiameter: calculateCoreDiameter(
-                calculateWireDimensions(core.conductor?.totalCoreArea || 0, core.conductor?.wireCount || 1).diameterPerWire,
-                core.conductor?.wireCount || 1
-            ),
-            insulationThickness: core.insulation?.thickness || 0,
-            materialDensity: core.conductor?.selectedRod?.density || 8.96,
-            insulationDensity: core.insulation?.density || 1.4,
-            drawingLength: drawingLength || 0
-        })
-    }, [
-        cableLength,
-        core.conductor?.totalCoreArea,
-        core.conductor?.wireCount,
-        core.insulation?.thickness,
-        core.conductor?.selectedRod?.density,
-        core.insulation?.density,
-        drawingLength,
-        setCoreContext
-    ])
-    // Build quote context for process variable calculations
-    const _quoteContext = {
-        cableLength,
-        coreArea: core.conductor?.totalCoreArea || 0,
-        wireCount: core.conductor?.wireCount || 1,
-        coreDiameter: calculateCoreDiameter(
-            calculateWireDimensions(core.conductor?.totalCoreArea || 0, core.conductor?.wireCount || 1).diameterPerWire,
-            core.conductor?.wireCount || 1
-        ),
-        insulationThickness: core.insulation?.thickness || 0,
-        materialDensity: core.conductor?.selectedRod?.density || 8.96,
-        insulationDensity: core.insulation?.density || 1.4,
-        drawingLength: calculateDrawingLength(core.conductor?.wireCount || 1, effectiveCoreLength ? effectiveCoreLength : 0) || 0
-    };
+    // Removed coreContext and _quoteContext - now using buildProcessContext() instead
 
 
     return (
@@ -1078,194 +895,51 @@ const CoreComponent = ({
                         </div>
 
                         {core.insulation && (
-                            <div className="px-4 pt-3 pb-4 bg-white space-y-3">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    {/* Fresh Type */}
-                                    <div className="md:col-span-2">
-                                        <FieldLabel>Fresh Material Type</FieldLabel>
-                                        <SelectField
-                                            value={core.insulation.freshMaterialTypeId || ''}
-                                            onChange={e => handleInsulationTypeSelect(e.target.value)}
-                                        >
-                                            <option value="">— Select Fresh Insulation —</option>
-                                            {insulationTypes.map(type => (
-                                                <option key={type._id} value={type._id}>
-                                                    {type.name} (ρ = {type.density} g/cm³)
-                                                </option>
-                                            ))}
-                                        </SelectField>
-                                        {insulationTypes.length === 0 && (
-                                            <p className="text-xs text-orange-500 mt-1">No insulation types found.</p>
-                                        )}
-                                    </div>
-
-                                    {/* Fresh Raw Material */}
-                                    <div className="md:col-span-2">
-                                        <FieldLabel>Fresh Raw Material</FieldLabel>
-                                        <SelectField
-                                            value={core.insulation.freshMaterialId || ''}
-                                            onChange={e => handleInsulationMaterialSelect(e.target.value)}
-                                            disabled={!core.insulation.freshMaterialTypeId}
-                                        >
-                                            <option value="">— Select Raw Material —</option>
-                                            {filteredInsulationMaterials.map(mat => (
-                                                <option key={mat._id} value={mat._id}>
-                                                    {mat.name} | Code: {mat.materialCode} | Stock: {mat.inventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.inventory?.avgPricePerKg?.toFixed(2) || 0}/kg
-                                                </option>
-                                            ))}
-                                        </SelectField>
-                                        {!core.insulation.freshMaterialTypeId && (
-                                            <p className="text-xs text-gray-400 mt-1">Select material type first</p>
-                                        )}
-                                        {core.insulation.freshMaterialTypeId && filteredInsulationMaterials.length === 0 && (
-                                            <p className="text-xs text-orange-500 mt-1">No raw materials found for this type</p>
-                                        )}
-                                    </div>
-
-                                    {/* Fresh Density */}
-                                    <div>
-                                        <FieldLabel>Fresh Density (g/cm³)</FieldLabel>
-                                        {
-                                            core?.insulation?.freshDensity || 0
-                                        }
-                                    </div>
-
-                                    {/* Fresh % - Auto-adjusts Reprocess % */}
-                                    <div className="md:col-span-2">
-                                        <FieldLabel>
-                                            Fresh / Reprocess Mix
-                                            <span className="ml-2 text-emerald-600 font-normal">{core.insulation.freshPercent}% fresh</span>
-                                            <span className="mx-1 text-gray-400">/</span>
-                                            <span className="text-purple-600 font-normal">{core.insulation.reprocessPercent}% reprocess</span>
-                                        </FieldLabel>
-                                        <div className="space-y-2">
-                                            <input
-                                                type="range"
-                                                min="0"
-                                                max="100"
-                                                value={core.insulation.freshPercent}
-                                                onChange={e => handleInsulationUpdate('freshPercent', parseFloat(e.target.value))}
-                                                className="w-full h-2 bg-gradient-to-r from-emerald-200 via-emerald-300 to-purple-300 rounded-lg appearance-none cursor-pointer"
-                                                style={{
-                                                    background: `linear-gradient(to right, #10b981 0%, #10b981 ${core.insulation.freshPercent}%, #a855f7 ${core.insulation.freshPercent}%, #a855f7 100%)`
-                                                }}
-                                            />
-                                            <div className="flex justify-between text-xs">
-                                                <span className="text-emerald-600 font-medium">100% Fresh</span>
-                                                <span className="text-gray-500">50/50</span>
-                                                <span className="text-purple-600 font-medium">100% Reprocess</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Reprocess Type */}
-                                    <div className="md:col-span-2">
-                                        <FieldLabel>
-                                            Reprocess Type
-                                            <span className="ml-1 text-gray-400 normal-case font-normal">(optional — can differ)</span>
-                                        </FieldLabel>
-                                        <SelectField
-                                            value={core.insulation.reprocessMaterialTypeId || ''}
-                                            onChange={e => handleReprocessTypeSelect(e.target.value)}
-                                            className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
-                                        >
-                                            <option value="">— Same as fresh / select reprocess type —</option>
-                                            {insulationTypes.map(type => (
-                                                <option key={type._id} value={type._id}>
-                                                    {type.name} (ρ = {type.density} g/cm³)
-                                                </option>
-                                            ))}
-                                        </SelectField>
-                                        {core.insulation.reprocessMaterialTypeId && (
-                                            <p className="text-xs text-purple-600 mt-1">
-                                                Reprocess stock: <strong>{core.insulation.reprocessMaterialTypeName}</strong>
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    {/* Reprocess Raw Material */}
-                                    <div className="md:col-span-2">
-                                        <FieldLabel>
-                                            Reprocess Raw Material
-                                            <span className="ml-1 text-gray-400 normal-case font-normal">(optional)</span>
-                                        </FieldLabel>
-                                        <SelectField
-                                            value={core.insulation.reprocessMaterialId || ''}
-                                            onChange={e => handleReprocessMaterialSelect(e.target.value)}
-                                            disabled={!core.insulation.reprocessMaterialTypeId}
-                                            className="border-purple-200 focus:ring-purple-300 focus:border-purple-400"
-                                        >
-                                            <option value="">— Select Reprocess Raw Material —</option>
-                                            {filteredReprocessMaterials.map(mat => (
-                                                <option key={mat._id} value={mat._id}>
-                                                    {mat.name} | Code: {mat.materialCode} | Reprocess: {mat.reprocessInventory?.totalWeight?.toFixed(1) || 0} kg | ₹{mat.reprocessInventory?.pricePerKg?.toFixed(2) || 0}/kg
-                                                </option>
-                                            ))}
-                                        </SelectField>
-                                        {!core.insulation.reprocessMaterialTypeId && (
-                                            <p className="text-xs text-gray-400 mt-1">Select reprocess type first</p>
-                                        )}
-                                        {core.insulation.reprocessMaterialTypeId && filteredReprocessMaterials.length === 0 && (
-                                            <p className="text-xs text-orange-500 mt-1">No reprocess materials found for this type</p>
-                                        )}
-                                    </div>
-
-
-                                    {/* Thickness */}
-                                    <div>
-                                        <FieldLabel>Thickness (mm)</FieldLabel>
-                                        <InputField
-                                            type="number" step="0.1"
-                                            value={core.insulation.thickness}
-                                            onChange={e => handleInsulationUpdate('thickness', parseFloat(e.target.value))}
-                                        />
-                                    </div>
-
-                                    {/* Wastage % */}
-                                    <div>
-                                        <FieldLabel>Wastage (%)</FieldLabel>
-                                        <InputField
-                                            type="number" step="0.1" min="0" max="100"
-                                            value={core.insulation.wastagePercent || 0}
-                                            onChange={e => handleInsulationUpdate('wastagePercent', parseFloat(e.target.value) || 0)}
-                                            placeholder="0"
-                                        />
-                                    </div>
-                                </div>
+                            <>
+                                <InsulationSelector
+                                    core={core}
+                                    onUpdate={(updatedInsulation) => {
+                                        setIsSaved(false);
+                                        setCore(prev => ({
+                                            ...prev,
+                                            insulation: updatedInsulation
+                                        }));
+                                    }}
+                                />
 
                                 {/* Insulation results */}
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-1">
-                                    <StatBox label="Insulated Dia" value={`${insulationCalc.insulatedDiameter} mm`} accent />
-                                    <StatBox label="Fresh Weight" value={`${insulationCalc.freshWeight} kg`} />
-                                    <StatBox label="Reprocess Weight" value={`${insulationCalc.reprocessWeight} kg`} />
-                                    <MaterialCostDisplay
-                                        materialId={core.insulation?.freshMaterialId}
-                                        weight={core.insulation?.freshWeight}
-                                        type="fresh"
-                                        label="Fresh Cost"
-                                    />
-                                    <MaterialCostDisplay
-                                        materialId={core.insulation?.reprocessMaterialId}
-                                        weight={core.insulation?.reprocessWeight}
-                                        type="reprocess"
-                                        label="Reprocess Cost"
-                                    />
-                                    <StatBox label="Insulation Total" value={fmtCur(insulationCalc.totalCost)} accent />
-                                </div>
+                                <div className="px-4 pb-4 bg-white">
+                                    <div className="grid grid-cols-2 md:grid-cols-2 gap-2 pt-1">
+                                        <StatBox label="Fresh Weight" value={`${core.insulation.freshWeight} kg`} />
+                                        <StatBox label="Reprocess Weight" value={`${core.insulation.reprocessWeight} kg`} />
+                                        <MaterialCostDisplay
+                                            materialId={core.insulation?.freshMaterialId}
+                                            weight={core.insulation?.freshWeight}
+                                            type="fresh"
+                                            label="Fresh Cost"
+                                        />
+                                        <MaterialCostDisplay
+                                            materialId={core.insulation?.reprocessMaterialId}
+                                            weight={core.insulation?.reprocessWeight}
+                                            type="reprocess"
+                                            label="Reprocess Cost"
+                                        />
+                                    </div>
 
-                                <div className="flex gap-2 pt-1 border-t border-gray-100">
-                                    <div className="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-                                        <p className="text-xs text-gray-400">Core Area</p>
-                                        <p className="text-sm font-bold text-gray-700">{fmtN(core.conductor?.totalCoreArea || 0, 2)} mm²</p>
-                                    </div>
-                                    <div className="flex-1 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
-                                        <p className="text-xs text-teal-500">Outer Area</p>
-                                        <p className="text-sm font-bold text-teal-700">
-                                            {calculateOuterArea(insulationCalc.insulatedDiameter).toFixed(2)} mm²
-                                        </p>
+                                    <div className="flex gap-2 pt-1 border-t border-gray-100 mt-3">
+                                        <div className="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                                            <p className="text-xs text-gray-400">Core Area</p>
+                                            <p className="text-sm font-bold text-gray-700">{fmtN(core.conductor?.totalCoreArea || 0, 2)} mm²</p>
+                                        </div>
+                                        <div className="flex-1 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                                            <p className="text-xs text-teal-500">Outer Area</p>
+                                            <p className="text-sm font-bold text-teal-700">
+                                                {calculateOuterArea(core.conductor.conductorDiameter + (core.insulation?.thickness || 0) + (core.insulation?.thickness || 0)).toFixed(2)} mm²
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </>
                         )}
 
                         {!core.insulation && (
@@ -1275,19 +949,45 @@ const CoreComponent = ({
                         )}
                     </div>
 
-                    {/* Process Selector for this Core */}
-                    {!loading && (
-                        <div className="mt-4">
-                            <ProcessSelector
-                                processes={core.processes || []}
-                                onAdd={addProcess}
-                                onRemove={removeProcess}
-                                onUpdateVariable={updateProcessVariable}
-                                processMasterList={processMasterList}
-                                quoteContext={coreContext}
-                                title={`Core ${index + 1} Processes`}
-                                compact={true}
+                    {/* Process Entries Section */}
+                    {!loading && core._id && (
+                        <div className="mt-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-gray-700">Core Processes</h4>
+                                <button
+                                    onClick={() => setShowProcessEditor(true)}
+                                    className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs font-medium transition-colors"
+                                >
+                                    + Add Process
+                                </button>
+                            </div>
+
+                            {/* Process Entry Editor */}
+                            {showProcessEditor && (
+                                <ProcessEntryEditor
+                                    parentId={core._id}
+                                    parentType="core"
+                                    context={buildProcessContext()}
+                                    onSave={handleProcessSave}
+                                    onCancel={() => setShowProcessEditor(false)}
+                                />
+                            )}
+
+                            {/* List of Process Entries */}
+                            <ProcessEntryList
+                                entries={processEntries}
+                                loading={loadingProcesses}
+                                onDelete={deleteProcessEntry}
                             />
+                        </div>
+                    )}
+
+                    {/* Show message if core not saved yet */}
+                    {!loading && !core._id && (
+                        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p className="text-sm text-amber-700">
+                                💡 Save the core first to add processes
+                            </p>
                         </div>
                     )}
 
