@@ -187,7 +187,7 @@ const useQuotationProcessStore = create((set, get) => ({
                 0
             );
 
-            console.log("all processes", processes);
+            console.log("all processes", processes, totalProcessCost);
             set({
                 allProcesses: processes,
                 processesInQuotation,

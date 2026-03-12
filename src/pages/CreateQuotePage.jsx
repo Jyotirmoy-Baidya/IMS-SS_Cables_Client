@@ -16,6 +16,7 @@ import api from '../api/axiosInstance';
 import useMaterialRequirementsStore from '../store/materialRequirementsStore';
 import useQuotationStore from '../store/quotationStore';
 import CustomerSelector from '../components/quotation/basic/CustomerSelector';
+import useQuotationProcessStore from '../store/quotationProcessStore';
 
 const evalFormula = (formula, variables) => {
     try {
@@ -189,13 +190,9 @@ const CreateQuotePage = () => {
 
 
     // Use material requirements store for all calculations
-    const { calculateAll, totalMaterialCost } = useMaterialRequirementsStore();
+    const { totalMaterialCost } = useMaterialRequirementsStore();
+    const { totalProcessCost } = useQuotationProcessStore();
 
-    // Recalculate whenever cores, sheaths, cable length, or material types change
-    useEffect(() => {
-        calculateAll(quoteId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [quoteId]);
 
 
     const handleSave = async (statusOverride) => {
@@ -210,11 +207,13 @@ const CreateQuotePage = () => {
                 customerId: selectedCustomerId || null,
                 cableLength,
                 status: statusOverride || 'enquired',
-                materialCost: 0,
-                processCost: 0,
-                grandTotal: 0,
+                materialCost: totalMaterialCost,
+                processCost: totalProcessCost,
+                grandTotal: totalMaterialCost + totalProcessCost,
                 notes: "Nothing",
             };
+
+            console.log(payload);
 
             // Update the quotation (cores already saved individually)
             await api.patch(`/quotation/patch-quotation/${quoteId}`, payload);
@@ -559,6 +558,8 @@ const CreateQuotePage = () => {
                 {/* Quotation Summary */}
                 <QuotationSummary
                     totalMaterialCost={totalMaterialCost}
+                    totalProcessCost={totalProcessCost}
+                    totalCosting={totalMaterialCost + totalProcessCost}
                 />
             </div>
         </div>
