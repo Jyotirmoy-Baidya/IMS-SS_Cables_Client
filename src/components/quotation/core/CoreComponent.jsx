@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Trash2, Zap, Package, Layers, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Copy, Minimize2, Maximize2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Trash2, Zap, Package, Layers, ChevronDown, ChevronUp, AlertTriangle, Copy, Minimize2, Maximize2 } from 'lucide-react';
 import {
     calculateWireDimensions,
     calculateDrawingLength,
@@ -9,7 +9,10 @@ import {
     calculateOuterArea
 } from '../../../utils/cableCalculations';
 import ProcessSelector from '../processes/ProcessSelector';
+import SelectedRawMaterialCard from './SelectedRawMaterialCard.jsx';
+import RawMaterialSelector from './RawMaterialSelector.jsx';
 import api from '../../../api/axiosInstance';
+import MaterialCostDisplay from './MaterialCostDisplay.jsx';
 
 const fmtN = (n, d = 3) => Number(n || 0).toFixed(d);
 const fmtCur = (n) => '₹' + Number(n || 0).toFixed(2);
@@ -41,35 +44,6 @@ const SelectField = ({ className = '', children, ...props }) => (
     </select>
 );
 
-// Default initial core structure
-const getDefaultCore = (id) => ({
-    id: id || Date.now(),
-    materialTypeId: null,
-    materialTypeName: '',
-    materialId: null,
-    materialDensity: 8.96,
-    totalCoreArea: 8,
-    wireCount: 16,
-    wastagePercent: 5,
-    selectedRod: null,
-    hasAnnealing: false,
-    hasInsulation: false,
-    coreLength: null,
-    insulation: {
-        materialTypeId: null,
-        materialTypeName: '',
-        materialId: null,
-        reprocessMaterialId: null,
-        thickness: 1,
-        density: 1.4,
-        freshPercent: 100,
-        reprocessPercent: 0,
-        wastagePercent: 5
-    },
-    processes: [],
-    materialRequired: []
-});
-
 const CoreComponent = ({
     core: providedCore,
     index,
@@ -78,28 +52,54 @@ const CoreComponent = ({
     onDeleteFromParent,
     onDuplicate
 }) => {
-    // Merge provided core with defaults to ensure all required fields exist
-    const initialCore = useMemo(() => {
-        if (!providedCore) return getDefaultCore();
 
-        return {
-            ...getDefaultCore(providedCore.id),
-            ...providedCore,
-            insulation: {
-                ...getDefaultCore().insulation,
-                ...(providedCore.insulation || {})
-            }
-        };
-    }, [providedCore]);
-
-    // Local core state
-    const [core, setCore] = useState(initialCore);
+    // Local core state - use backend response directly
+    const [core, setCore] = useState(providedCore || {
+        name: '',
+        coreNumber: index + 1,
+        conductor: {
+            materialTypeId: null,
+            materialTypeName: '',
+            materialId: null,
+            selectedRod: null,
+            totalCoreArea: 8,
+            wireCount: 16,
+            wireDiameter: 0,
+            conductorDiameter: 0,
+            drawingLength: 0,
+            materialWeight: 0,
+            wastagePercent: 5,
+            hasAnnealing: false
+        },
+        insulation: {
+            freshMaterialTypeId: null,
+            freshMaterialId: null,
+            reprocessMaterialTypeId: null,
+            reprocessMaterialId: null,
+            thickness: 0,
+            freshDensity: 1.4,
+            freshPercent: 100,
+            freshWeight: 0,
+            reprocessDensity: 1.4,
+            reprocessPercent: 0,
+            reprocessWeight: 0,
+            wastagePercent: 0
+        },
+        coreLength: null,
+        materialRequired: [],
+        processes: [],
+        costs: {
+            totalMaterialCost: 0,
+            totalProcessCost: 0,
+            grandTotal: 0
+        }
+    });
 
     // UI state
     const [showRodSelection, setShowRodSelection] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [isSaved, setIsSaved] = useState(!!initialCore._id);
+    const [isSaved, setIsSaved] = useState(!!providedCore?._id);
 
     // Material data
     const [metalTypes, setMetalTypes] = useState([]);
@@ -108,6 +108,8 @@ const CoreComponent = ({
     const [insulationRawMaterials, setInsulationRawMaterials] = useState([]);
     const [processMasterList, setProcessMasterList] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const [selectedRodState, setSelectedRodState] = useState();
 
     // Fetch materials and processes on mount
     useEffect(() => {
@@ -139,38 +141,53 @@ const CoreComponent = ({
 
     // Sync with parent core changes
     useEffect(() => {
-        setCore(initialCore);
-        setIsSaved(!!initialCore._id);
-    }, [initialCore]);
+        if (providedCore) {
+            setCore(providedCore);
+            setIsSaved(!!providedCore._id);
+        }
+    }, [providedCore]);
 
-    // Update local core state
+
+    // Update conductor fields
     const handleCoreUpdate = (field, value) => {
         setIsSaved(false);
-        setCore(prev => ({ ...prev, [field]: value }));
+        setCore(prev => ({
+            ...prev,
+            conductor: {
+                ...prev.conductor,
+                [field]: value
+            }
+        }));
     };
 
     // Toggle insulation on/off
     const handleInsulationToggle = (enabled) => {
         setIsSaved(false);
         if (!enabled) {
-            // Clear insulation data when disabling
+            // Clear insulation when disabling
             setCore(prev => ({
                 ...prev,
-                hasInsulation: false,
+                insulation: undefined
+            }));
+        } else {
+            // Initialize insulation with defaults when enabling
+            setCore(prev => ({
+                ...prev,
                 insulation: {
-                    materialTypeId: null,
-                    materialTypeName: '',
-                    materialId: null,
-                    reprocessMaterialId: null,
-                    thickness: 1,
-                    density: 1.4,
+                    freshMaterialTypeId: null,
+                    freshMaterialId: null,
+                    freshDensity: 1.4,
                     freshPercent: 100,
+                    freshWeight: 0,
+                    reprocessMaterialTypeId: null,
+                    reprocessMaterialId: null,
+                    reprocessDensity: 0,
                     reprocessPercent: 0,
+                    reprocessWeight: 0,
+                    thickness: 1,
                     wastagePercent: 5
                 }
             }));
-        } else {
-            setCore(prev => ({ ...prev, hasInsulation: true }));
         }
     };
 
@@ -206,26 +223,228 @@ const CoreComponent = ({
         }
     };
 
+    // Recalculate dimensions whenever relevant fields change
+    useEffect(() => {
+        const effectiveLength = core.coreLength ?? cableLength;
+        if (!effectiveLength || effectiveLength <= 0) return;
+
+        // ═══════════════════════════════════════════════════════
+        // CONDUCTOR CALCULATIONS
+        // ═══════════════════════════════════════════════════════
+        if (core.conductor?.totalCoreArea && core.conductor?.wireCount) {
+            const totalCoreArea = core.conductor.totalCoreArea;
+            const wireCount = core.conductor.wireCount;
+            const density = core.conductor.materialDensity || 8.96;
+            const wastagePercent = core.conductor.wastagePercent || 0;
+
+            // Calculate wire dimensions
+            const areaPerWire = totalCoreArea / wireCount;
+            const wireDiameter = 2 * Math.sqrt(areaPerWire / Math.PI);
+
+            // Calculate conductor diameter (stranded wire packing)
+            const calculateCoreDiam = (wireDia, wCount) => {
+                if (wCount === 1) return wireDia;
+                return Math.sqrt(wCount) * wireDia / 2;
+            };
+            const conductorDiameter = calculateCoreDiam(wireDiameter, wireCount);
+
+            // Calculate drawing length
+            const drawingLength = effectiveLength * wireCount;
+
+            // Calculate material weight with wastage
+            const materialWeight = calculateMaterialWeight(totalCoreArea, effectiveCoreLength, density, wastagePercent);
+
+            // Update conductor calculated fields
+            setCore(prev => ({
+                ...prev,
+                conductor: {
+                    ...prev.conductor,
+                    wireDiameter: parseFloat(wireDiameter.toFixed(4)),
+                    conductorDiameter: parseFloat(conductorDiameter.toFixed(4)),
+                    drawingLength: parseFloat(drawingLength.toFixed(2)),
+                    materialWeight: parseFloat(materialWeight.toFixed(4))
+                }
+            }));
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // INSULATION CALCULATIONS
+        // ═══════════════════════════════════════════════════════
+        if (core.conductor?.conductorDiameter > 0 && core.insulation?.freshMaterialId) {
+            const conductorDiameter = core.conductor.conductorDiameter;
+            const thickness = core.insulation.thickness || 0;
+            const freshPercent = core.insulation.freshPercent || 0;
+            const reprocessPercent = core.insulation.reprocessPercent || 0;
+            const wastagePercent = core.insulation.wastagePercent || 0;
+            const freshDensity = core.insulation.freshDensity || 1.4;
+            const reprocessDensity = core.insulation.reprocessDensity || freshDensity;
+
+            // Calculate insulated diameter (for volume calculation only, not stored)
+            const insulatedDiameter = conductorDiameter + (2 * thickness);
+
+            // Calculate insulation volume
+            const outerRadius = insulatedDiameter / 2;
+            const innerRadius = conductorDiameter / 2;
+            const volumeMm3 = Math.PI * (Math.pow(outerRadius, 2) - Math.pow(innerRadius, 2)) * effectiveLength * 1000;
+            const volumeCm3 = volumeMm3 / 1000;
+
+            // Calculate fresh insulation weight with wastage
+            const freshWeight = (volumeCm3 * (freshPercent / 100) * freshDensity * (1 + wastagePercent / 100)) / 1000;
+
+            // Calculate reprocess insulation weight with wastage
+            const reprocessWeight = (volumeCm3 * (reprocessPercent / 100) * reprocessDensity * (1 + wastagePercent / 100)) / 1000;
+
+            // Update insulation calculated weights (freshWeight and reprocessWeight stored separately)
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    freshWeight: parseFloat(freshWeight.toFixed(4)),
+                    reprocessWeight: parseFloat(reprocessWeight.toFixed(4))
+                }
+            }));
+        }
+    }, [
+        core.conductor?.totalCoreArea,
+        core.conductor?.wireCount,
+        core.conductor?.wastagePercent,
+        core.conductor?.materialDensity,
+        core.conductor?.conductorDiameter,
+        core.insulation?.thickness,
+        core.insulation?.freshDensity,
+        core.insulation?.reprocessDensity,
+        core.insulation?.freshPercent,
+        core.insulation?.reprocessPercent,
+        core.insulation?.wastagePercent,
+        core.insulation?.freshMaterialId,
+        core.coreLength,
+        cableLength,
+        core.conductor?.materialId,
+        core.conductor?.materialTypeId
+    ]);
+
+    // Build material requirements array with pricing
+    const buildMaterialRequirements = async (coreData) => {
+        const materialRequired = [];
+
+        // ═══════════════════════════════════════════════════════
+        // CONDUCTOR MATERIAL
+        // ═══════════════════════════════════════════════════════
+        if (coreData.conductor?.materialWeight > 0 && coreData.conductor?.materialId) {
+            materialRequired.push({
+                materialId: coreData.conductor.materialId,
+                materialName: coreData.conductor.selectedRod?.name || coreData.conductor.materialTypeName || 'Metal',
+                category: 'metal',
+                purpose: 'conductor-' + (coreData.conductor.materialTypeName || 'metal').toLowerCase(),
+                weight: coreData.conductor.materialWeight,
+                type: 'fresh',
+                pricePerKg: 0,
+                totalCost: 0
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // INSULATION MATERIALS (use already calculated weights)
+        // ═══════════════════════════════════════════════════════
+        // Add fresh insulation material
+        if (coreData.insulation?.freshWeight > 0 && coreData.insulation?.freshMaterialId) {
+            materialRequired.push({
+                materialId: coreData.insulation.freshMaterialId,
+                materialName: 'Insulation Fresh', // Will be updated with actual name from pricing fetch
+                category: 'insulation',
+                purpose: 'insulation-fresh',
+                weight: coreData.insulation.freshWeight,
+                type: 'fresh',
+                pricePerKg: 0,
+                totalCost: 0
+            });
+        }
+
+        // Add reprocess insulation material
+        if (coreData.insulation?.reprocessWeight > 0 && coreData.insulation?.reprocessMaterialId) {
+            materialRequired.push({
+                materialId: coreData.insulation.reprocessMaterialId,
+                materialName: 'Insulation Reprocess', // Will be updated with actual name from pricing fetch
+                category: 'insulation',
+                purpose: 'insulation-reprocess',
+                weight: coreData.insulation.reprocessWeight,
+                type: 'reprocess',
+                pricePerKg: 0,
+                totalCost: 0
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // FETCH MATERIAL PRICES
+        // ═══════════════════════════════════════════════════════
+        if (materialRequired.length > 0) {
+            try {
+                const materialIds = materialRequired.map(m => m.materialId);
+                const materialsRes = await api.post('/raw-material/get-by-ids', { materialIds });
+                const pricingMap = {};
+
+                materialsRes.data.forEach(mat => {
+                    pricingMap[mat._id] = {
+                        avgPricePerKg: mat.inventory?.avgPricePerKg || 0,
+                        reprocessPricePerKg: mat.reprocessInventory?.pricePerKg || 0
+                    };
+                });
+
+                // Update material requirements with pricing
+                materialRequired.forEach(req => {
+                    const pricing = pricingMap[req.materialId];
+                    if (pricing) {
+                        const pricePerKg = req.type === 'reprocess'
+                            ? pricing.reprocessPricePerKg
+                            : pricing.avgPricePerKg;
+                        req.pricePerKg = pricePerKg;
+                        req.totalCost = parseFloat((req.weight * pricePerKg).toFixed(2));
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to fetch material pricing:', error);
+            }
+        }
+
+        return materialRequired;
+    };
+
     // Save core to backend
     const handleSave = async () => {
         if (!quotationId) {
             alert('No quotation ID found. Please refresh the page.');
             return;
         }
-        console.log(core);
+
         setIsSaving(true);
         try {
+            // Build material requirements with pricing
+            const materialRequired = await buildMaterialRequirements(core);
+
+            // Prepare core data with material requirements and costs
+            const coreData = {
+                ...core,
+                coreNumber: index + 1,
+                coreLength: core.coreLength ?? cableLength,
+                materialRequired,
+                costs: {
+                    totalMaterialCost: parseFloat(materialRequired.reduce((sum, req) => sum + (req.totalCost || 0), 0).toFixed(2)),
+                    totalProcessCost: 0,
+                    grandTotal: parseFloat(materialRequired.reduce((sum, req) => sum + (req.totalCost || 0), 0).toFixed(2))
+                }
+            };
+
             let response;
             if (core._id) {
                 // Update existing core
-                response = await api.put(`/quotation/${quotationId}/cores/${core._id}`, core);
+                response = await api.put(`/quotation/${quotationId}/cores/${core._id}`, coreData);
             } else {
                 // Create new core
-                response = await api.post(`/quotation/${quotationId}/cores`, core);
+                response = await api.post(`/quotation/${quotationId}/cores`, coreData);
             }
 
-            // Update local state with saved core data (including _id)
-            setCore(prev => ({ ...prev, _id: response.data._id }));
+            // Update local state with backend response
+            setCore(response.data);
             setIsSaved(true);
         } catch (error) {
             console.error('Failed to save core:', error);
@@ -287,44 +506,51 @@ const CoreComponent = ({
         }));
     };
 
-    // Build quote context for process variable calculations
-    const quoteContext = {
-        cableLength,
-        coreArea: core.totalCoreArea,
-        wireCount: core.wireCount,
-        coreDiameter: calculateCoreDiameter(
-            calculateWireDimensions(core.totalCoreArea, core.wireCount).diameterPerWire,
-            core.wireCount
-        ),
-        insulationThickness: core.insulation?.thickness || 0,
-        materialDensity: core.materialDensity || 8.96,
-        insulationDensity: core.insulation?.density || 1.4
-    };
+
 
     const handleMaterialTypeSelect = (typeId) => {
         setIsSaved(false);
         if (!typeId) {
             setCore(prev => ({
                 ...prev,
-                materialTypeId: null,
-                materialTypeName: '',
-                materialDensity: 8.96
+                conductor: {
+                    ...prev.conductor,
+                    materialTypeId: null,
+                    materialTypeName: ''
+                }
             }));
             return;
         }
         const type = metalTypes.find(t => t._id === typeId);
         if (!type) return;
+        console.log("type", type);
         setCore(prev => ({
             ...prev,
-            materialTypeId: typeId,
-            materialTypeName: type.name,
-            materialDensity: type.density || 8.96
+            conductor: {
+                ...prev.conductor,
+                materialTypeId: typeId,
+                materialTypeName: type.name,
+                materialDensity: type.density,
+                materialId: null,
+                materialName: null,
+                selectedRod: null
+            }
         }));
     };
 
     const handleRodSelect = (rod) => {
         setIsSaved(false);
-        setCore(prev => ({ ...prev, selectedRod: rod }));
+        setSelectedRodState();
+        setCore(prev => ({
+            ...prev,
+            conductor: {
+                ...prev.conductor,
+                materialId: rod._id,
+                selectedRod: {
+                    _id: rod._id
+                }
+            }
+        }));
         setShowRodSelection(false);
     };
 
@@ -335,30 +561,23 @@ const CoreComponent = ({
                 ...prev,
                 insulation: {
                     ...prev.insulation,
-                    materialTypeId: null,
-                    materialTypeName: '',
-                    materialId: null,
-                    material: null,
-                    density: 1.4,
-                    freshPricePerKg: 0,
-                    reprocessPricePerKg: 0
+                    freshMaterialTypeId: null,
+                    freshMaterialId: null,
+                    freshDensity: null
                 }
             }));
             return;
         }
         const type = insulationTypes.find(t => t._id === typeId);
         if (!type) return;
+        console.log("type", type);
         setCore(prev => ({
             ...prev,
             insulation: {
                 ...prev.insulation,
-                materialTypeId: typeId,
-                materialTypeName: type.name,
-                materialId: null,
-                material: null,
-                density: type.density || 1.4,
-                freshPricePerKg: 0,
-                reprocessPricePerKg: 0
+                freshMaterialTypeId: typeId,
+                freshMaterialId: null,
+                freshDensity: type.density
             }
         }));
     };
@@ -370,10 +589,8 @@ const CoreComponent = ({
                 ...prev,
                 insulation: {
                     ...prev.insulation,
-                    materialId: null,
-                    material: null,
-                    freshPricePerKg: 0,
-                    reprocessPricePerKg: 0
+                    freshMaterialId: null,
+                    freshDensity: null
                 }
             }));
             return;
@@ -384,15 +601,7 @@ const CoreComponent = ({
             ...prev,
             insulation: {
                 ...prev.insulation,
-                materialId: material._id,
-                material: {
-                    _id: material._id,
-                    name: material.name,
-                    category: material.category,
-                    specifications: material.specifications
-                },
-                freshPricePerKg: material?.inventory?.avgPricePerKg || 0,
-                reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
+                freshMaterialId: material._id
             }
         }));
     };
@@ -405,11 +614,8 @@ const CoreComponent = ({
                 insulation: {
                     ...prev.insulation,
                     reprocessMaterialTypeId: null,
-                    reprocessMaterialTypeName: '',
                     reprocessMaterialId: null,
-                    reprocessMaterial: null,
-                    reprocessDensity: null,
-                    reprocessPricePerKg: 0
+                    reprocessDensity: 0
                 }
             }));
             return;
@@ -421,11 +627,8 @@ const CoreComponent = ({
             insulation: {
                 ...prev.insulation,
                 reprocessMaterialTypeId: typeId,
-                reprocessMaterialTypeName: type.name,
                 reprocessMaterialId: null,
-                reprocessMaterial: null,
-                reprocessDensity: type.density || null,
-                reprocessPricePerKg: 0
+                reprocessDensity: type.density || 1.4
             }
         }));
     };
@@ -438,8 +641,7 @@ const CoreComponent = ({
                 insulation: {
                     ...prev.insulation,
                     reprocessMaterialId: null,
-                    reprocessMaterial: null,
-                    reprocessPricePerKg: 0
+                    reprocessDensity: 0
                 }
             }));
             return;
@@ -451,53 +653,40 @@ const CoreComponent = ({
             insulation: {
                 ...prev.insulation,
                 reprocessMaterialId: material._id,
-                reprocessMaterial: {
-                    _id: material._id,
-                    name: material.name,
-                    category: material.category,
-                    specifications: material.specifications
-                },
-                reprocessPricePerKg: material?.reprocessInventory?.pricePerKg || 0
+                reprocessDensity: material.specifications?.density || 1.4
             }
         }));
     };
 
     // Calculations - use core length if set, otherwise cable length
     const effectiveCoreLength = core.coreLength ?? cableLength;
-    const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-    const drawingLength = calculateDrawingLength(core.wireCount, effectiveCoreLength);
+    const wireDimensions = calculateWireDimensions(core.conductor?.totalCoreArea || 0, core.conductor?.wireCount || 1);
+    const drawingLength = calculateDrawingLength(core.conductor?.wireCount || 1, effectiveCoreLength);
     const materialWeight = calculateMaterialWeight(
-        core.totalCoreArea, effectiveCoreLength, core.materialDensity, core.wastagePercent
+        core.conductor?.totalCoreArea || 0, effectiveCoreLength, core.conductor?.selectedRod?.density || 0, core.conductor?.wastagePercent || 0
     );
-    const rodPrice = core.selectedRod?.inventory?.avgPricePerKg
-        || core.selectedRod?.inventory?.lastPricePerKg || 0;
+    const rodPrice = core.conductor?.selectedRod?.inventory?.avgPricePerKg
+        || core.conductor?.selectedRod?.inventory?.lastPricePerKg || 0;
     const materialCost = materialWeight * rodPrice;
-    const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
+    const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.conductor?.wireCount || 1);
     const insulationCalc = calculateInsulation(
         coreDiameter,
-        core.insulation.thickness,
-        effectiveCoreLength,
+        core.insulation?.thickness || 0,
+        effectiveCoreLength || 0,
         'custom',
-        core.insulation.freshPercent,
-        core.insulation.reprocessPercent || 0,
-        core.insulation.freshPricePerKg || 0,
-        core.insulation.reprocessPricePerKg || null,
-        core.insulation.density || 1.4,
-        core.insulation.reprocessDensity || null,
-        core.insulation.wastagePercent || 0
+        core.insulation?.freshPercent || 100,
+        core.insulation?.reprocessPercent || 0,
+        core.insulation?.freshPricePerKg || 0,
+        core.insulation?.reprocessPricePerKg || null,
+        core.insulation?.density || 1.4,
+        core.insulation?.reprocessDensity || null,
+        core.insulation?.wastagePercent || 0
     );
 
-    const filteredRods = core.materialTypeId
-        ? metalRawMaterials.filter(m => {
-            const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === core.materialTypeId;
-        })
-        : [];
-
-    const filteredInsulationMaterials = core.insulation?.materialTypeId
+    const filteredInsulationMaterials = core.insulation?.freshMaterialTypeId
         ? insulationRawMaterials.filter(m => {
             const mtId = typeof m.materialTypeId === 'object' ? m.materialTypeId?._id : m.materialTypeId;
-            return mtId === core.insulation.materialTypeId;
+            return mtId === core.insulation.freshMaterialTypeId;
         })
         : [];
 
@@ -508,7 +697,7 @@ const CoreComponent = ({
         })
         : [];
 
-    const selectedTypeName = metalTypes.find(t => t._id === core.materialTypeId)?.name || null;
+    const selectedTypeName = metalTypes.find(t => t._id === core.conductor?.materialTypeId)?.name || null;
 
     // Calculate process cost for this core
     const processCost = (core.processes || []).reduce((sum, process) => {
@@ -526,6 +715,48 @@ const CoreComponent = ({
         }
     }, 0);
 
+    const [coreContext, setCoreContext] = useState({});
+
+    useEffect(() => {
+        setCoreContext({
+            cableLength,
+            coreArea: core.conductor?.totalCoreArea || 0,
+            wireCount: core.conductor?.wireCount || 1,
+            coreDiameter: calculateCoreDiameter(
+                calculateWireDimensions(core.conductor?.totalCoreArea || 0, core.conductor?.wireCount || 1).diameterPerWire,
+                core.conductor?.wireCount || 1
+            ),
+            insulationThickness: core.insulation?.thickness || 0,
+            materialDensity: core.conductor?.selectedRod?.density || 8.96,
+            insulationDensity: core.insulation?.density || 1.4,
+            drawingLength: drawingLength || 0
+        })
+    }, [
+        cableLength,
+        core.conductor?.totalCoreArea,
+        core.conductor?.wireCount,
+        core.insulation?.thickness,
+        core.conductor?.selectedRod?.density,
+        core.insulation?.density,
+        drawingLength,
+        setCoreContext
+    ])
+    // Build quote context for process variable calculations
+    const _quoteContext = {
+        cableLength,
+        coreArea: core.conductor?.totalCoreArea || 0,
+        wireCount: core.conductor?.wireCount || 1,
+        coreDiameter: calculateCoreDiameter(
+            calculateWireDimensions(core.conductor?.totalCoreArea || 0, core.conductor?.wireCount || 1).diameterPerWire,
+            core.conductor?.wireCount || 1
+        ),
+        insulationThickness: core.insulation?.thickness || 0,
+        materialDensity: core.conductor?.selectedRod?.density || 8.96,
+        insulationDensity: core.insulation?.density || 1.4,
+        drawingLength: calculateDrawingLength(core.conductor?.wireCount || 1, effectiveCoreLength ? effectiveCoreLength : 0) || 0
+    };
+
+
     return (
         <div id={`core-${core.id}`} className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm mb-4">
 
@@ -538,7 +769,7 @@ const CoreComponent = ({
                     <div>
                         <h3 className="text-base font-bold text-white tracking-wide">Core {index + 1}</h3>
                         <div className="font-mono text-xs text-slate-300 mt-0.5">
-                            {core.totalCoreArea.toFixed(1)}-{core.wireCount}/{wireDimensions.diameterPerWire.toFixed(1)}-{core.insulation.thickness.toFixed(1)}
+                            {core.conductor?.totalCoreArea?.toFixed(1) || '0.0'}-{core.conductor?.wireCount || 1}/{core.conductor?.wireDiameter?.toFixed(1) || '0.0'}{core.insulation?.thickness ? `-${core.insulation.thickness.toFixed(1)}` : ''}
                         </div>
                     </div>
                 </div>
@@ -546,8 +777,15 @@ const CoreComponent = ({
                     {/* Cost summary when collapsed */}
                     {isCollapsed && (
                         <div className="flex items-center gap-3 mr-4 text-xs font-medium">
-                            <span className="text-orange-300">Metal: {fmtCur(materialCost)}</span>
-                            <span className="text-blue-300">Insulation: {fmtCur(insulationCalc.totalCost)}</span>
+                            {
+                                core?.materialRequired?.length > 0 &&
+                                <span className="text-orange-300">Metal: {fmtCur(core.materialRequired[0].totalCost)}</span>
+                            }
+
+                            {
+                                core?.materialRequired?.length > 1 &&
+                                <span className="text-blue-300">Insulation: {fmtCur(core.materialRequired[1]?.totalCost)}</span>
+                            }
                             <span className="text-green-300">Process: {fmtCur(processCost)}</span>
                             <span className="text-white font-bold ml-2">Total: {fmtCur(materialCost + insulationCalc.totalCost + processCost)}</span>
                         </div>
@@ -619,28 +857,41 @@ const CoreComponent = ({
                             </div>
                             <div className="flex items-center gap-2">
                                 {core.coreLength !== null && core.coreLength !== undefined ? (
+                                    // Custom length mode - show input field
                                     <>
                                         <InputField
                                             type="number"
                                             min="1"
                                             step="1"
                                             value={core.coreLength}
-                                            onChange={e => handleCoreUpdate('coreLength', parseFloat(e.target.value) || 0)}
+                                            onChange={e => {
+                                                setIsSaved(false);
+                                                setCore(prev => ({ ...prev, coreLength: parseFloat(e.target.value) || 0 }));
+                                            }}
                                             className="w-24 text-right font-bold text-indigo-900"
                                         />
                                         <span className="text-sm font-semibold text-indigo-700">meters</span>
+                                        <span className="text-xs text-gray-400">(custom)</span>
                                         <button
-                                            onClick={() => handleCoreUpdate('coreLength', null)}
+                                            onClick={() => {
+                                                setIsSaved(false);
+                                                setCore(prev => ({ ...prev, coreLength: null }));
+                                            }}
                                             className="ml-2 px-3 py-1.5 text-xs bg-white border border-indigo-300 text-indigo-700 rounded-lg hover:bg-indigo-50 font-medium transition-colors"
                                         >
                                             Use Cable Length
                                         </button>
                                     </>
                                 ) : (
+                                    // Using cable length - show static value
                                     <>
                                         <span className="text-lg font-bold text-indigo-900">{cableLength} meters</span>
+                                        <span className="text-xs text-gray-400">(from cable)</span>
                                         <button
-                                            onClick={() => handleCoreUpdate('coreLength', cableLength)}
+                                            onClick={() => {
+                                                setIsSaved(false);
+                                                setCore(prev => ({ ...prev, coreLength: cableLength }));
+                                            }}
                                             className="ml-2 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
                                         >
                                             Set Custom Length
@@ -663,7 +914,7 @@ const CoreComponent = ({
                             <div className="md:col-span-2">
                                 <FieldLabel>Metal Material Type</FieldLabel>
                                 <SelectField
-                                    value={core.materialTypeId || ''}
+                                    value={core.conductor?.materialTypeId || ''}
                                     onChange={e => handleMaterialTypeSelect(e.target.value)}
                                 >
                                     <option value="">— Select Metal Type —</option>
@@ -683,7 +934,7 @@ const CoreComponent = ({
                                 <FieldLabel>Core Area (mm²)</FieldLabel>
                                 <InputField
                                     type="number" step="0.1"
-                                    value={core.totalCoreArea}
+                                    value={core.conductor?.totalCoreArea}
                                     onChange={e => handleCoreUpdate('totalCoreArea', parseFloat(e.target.value))}
                                 />
                             </div>
@@ -693,7 +944,7 @@ const CoreComponent = ({
                                 <FieldLabel>No. of Wires</FieldLabel>
                                 <InputField
                                     type="number"
-                                    value={core.wireCount}
+                                    value={core.conductor?.wireCount}
                                     onChange={e => handleCoreUpdate('wireCount', parseInt(e.target.value))}
                                 />
                             </div>
@@ -703,7 +954,7 @@ const CoreComponent = ({
                                 <FieldLabel>Wastage (%)</FieldLabel>
                                 <InputField
                                     type="number"
-                                    value={core.wastagePercent}
+                                    value={core.conductor?.wastagePercent}
                                     onChange={e => handleCoreUpdate('wastagePercent', parseFloat(e.target.value))}
                                 />
                             </div>
@@ -713,7 +964,7 @@ const CoreComponent = ({
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        checked={core.hasAnnealing || false}
+                                        checked={core.conductor?.hasAnnealing || false}
                                         onChange={e => handleCoreUpdate('hasAnnealing', e.target.checked)}
                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-300"
                                     />
@@ -744,7 +995,7 @@ const CoreComponent = ({
                             </div>
                             <button
                                 onClick={() => setShowRodSelection(!showRodSelection)}
-                                disabled={!core.materialTypeId}
+                                disabled={!core.conductor.materialTypeId}
                                 className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                             >
                                 {showRodSelection ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -761,73 +1012,26 @@ const CoreComponent = ({
                                 </div>
                             )}
 
-                            {core.selectedRod ? (
-                                <div className="flex items-start justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-3">
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <CheckCircle size={13} className="text-blue-600" />
-                                            <span className="text-sm font-semibold text-blue-800">{core.selectedRod.name}</span>
-                                        </div>
-                                        {core.selectedRod.specifications?.dimensions && (
-                                            <p className="text-xs text-blue-500 mt-0.5 ml-5">{core.selectedRod.specifications.dimensions}</p>
-                                        )}
-                                    </div>
-                                    <div className="text-right shrink-0 ml-4">
-                                        <p className="text-xs font-bold text-blue-700">₹{(core.selectedRod.inventory?.avgPricePerKg || 0).toFixed(2)}/kg</p>
-                                        {core.selectedRod.inventory?.lastPricePerKg > 0 && (
-                                            <p className="text-xs text-gray-400">Last: ₹{core.selectedRod.inventory.lastPricePerKg}/kg</p>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : core.materialTypeId ? (
-                                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                                    <AlertTriangle size={13} />
-                                    No rod selected — material cost will be ₹0.
-                                </div>
-                            ) : null}
+                            <SelectedRawMaterialCard materialId={core.conductor?.materialId} />
 
-                            {/* Rod grid */}
-                            {showRodSelection && (
-                                filteredRods.length === 0 ? (
-                                    <div className="text-sm text-gray-400 italic text-center py-3 bg-gray-50 rounded-lg mb-3">
-                                        No raw materials found for this type. Add them in Raw Materials → Inventory.
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-2 mb-3">
-                                        {filteredRods.map(rod => (
-                                            <button
-                                                key={rod._id}
-                                                onClick={() => handleRodSelect(rod)}
-                                                className={`p-2.5 border-2 rounded-lg text-left text-sm transition-colors ${core.selectedRod?._id === rod._id
-                                                    ? 'bg-blue-50 border-blue-500'
-                                                    : 'bg-white border-gray-200 hover:border-amber-300 hover:bg-amber-50'
-                                                    }`}
-                                            >
-                                                <div className="font-semibold text-gray-800">{rod.name}</div>
-                                                {rod.specifications?.dimensions && (
-                                                    <div className="text-xs text-gray-500 mt-0.5">{rod.specifications.dimensions}</div>
-                                                )}
-                                                <div className="flex items-center justify-between mt-1.5">
-                                                    <span className="text-xs font-bold text-blue-700">
-                                                        ₹{(rod.inventory?.avgPricePerKg || 0).toFixed(2)}/kg
-                                                    </span>
-                                                    {rod.inventory?.totalWeight > 0 && (
-                                                        <span className="text-xs text-emerald-600 font-medium">
-                                                            {rod.inventory.totalWeight.toFixed(1)} kg
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )
-                            )}
+                            {/* Raw Material Selector */}
+                            <RawMaterialSelector
+                                materialTypeId={core.conductor?.materialTypeId}
+                                selectedMaterialId={core.conductor?.materialId}
+                                onSelect={handleRodSelect}
+                                show={showRodSelection}
+                            />
 
                             {/* Conductor metrics */}
                             <div className="grid grid-cols-3 gap-2">
                                 <StatBox label="Drawing Length" value={`${fmtN(drawingLength, 1)} m`} />
-                                <StatBox label="Material Weight" value={`${fmtN(materialWeight)} kg`} />
-                                <StatBox label="Material Cost" value={fmtCur(materialCost)} accent />
+                                <StatBox label="Material Weight" value={`${fmtN(core.conductor.materialWeight)} kg`} />
+
+                                <MaterialCostDisplay
+                                    materialId={core.conductor.materialId}
+                                    weight={core.conductor.materialWeight}
+                                    type="fresh"
+                                />
                             </div>
                         </div>
                     </div>
@@ -842,7 +1046,7 @@ const CoreComponent = ({
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
                                     type="checkbox"
-                                    checked={core.hasInsulation || false}
+                                    checked={!!core.insulation}
                                     onChange={e => handleInsulationToggle(e.target.checked)}
                                     className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                                 />
@@ -850,14 +1054,14 @@ const CoreComponent = ({
                             </label>
                         </div>
 
-                        {core.hasInsulation && (
+                        {core.insulation && (
                             <div className="px-4 pt-3 pb-4 bg-white space-y-3">
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     {/* Fresh Type */}
                                     <div className="md:col-span-2">
                                         <FieldLabel>Fresh Material Type</FieldLabel>
                                         <SelectField
-                                            value={core.insulation.materialTypeId || ''}
+                                            value={core.insulation.freshMaterialTypeId || ''}
                                             onChange={e => handleInsulationTypeSelect(e.target.value)}
                                         >
                                             <option value="">— Select Fresh Insulation —</option>
@@ -876,9 +1080,9 @@ const CoreComponent = ({
                                     <div className="md:col-span-2">
                                         <FieldLabel>Fresh Raw Material</FieldLabel>
                                         <SelectField
-                                            value={core.insulation.materialId || ''}
+                                            value={core.insulation.freshMaterialId || ''}
                                             onChange={e => handleInsulationMaterialSelect(e.target.value)}
-                                            disabled={!core.insulation.materialTypeId}
+                                            disabled={!core.insulation.freshMaterialTypeId}
                                         >
                                             <option value="">— Select Raw Material —</option>
                                             {filteredInsulationMaterials.map(mat => (
@@ -887,29 +1091,20 @@ const CoreComponent = ({
                                                 </option>
                                             ))}
                                         </SelectField>
-                                        {!core.insulation.materialTypeId && (
+                                        {!core.insulation.freshMaterialTypeId && (
                                             <p className="text-xs text-gray-400 mt-1">Select material type first</p>
                                         )}
-                                        {core.insulation.materialTypeId && filteredInsulationMaterials.length === 0 && (
+                                        {core.insulation.freshMaterialTypeId && filteredInsulationMaterials.length === 0 && (
                                             <p className="text-xs text-orange-500 mt-1">No raw materials found for this type</p>
                                         )}
                                     </div>
 
-                                    {/* Fresh Price */}
+                                    {/* Fresh Density */}
                                     <div>
-                                        <FieldLabel>
-                                            Fresh Price/kg (₹)
-                                            {core.insulation.freshPricePerKg > 0 && (
-                                                <span className="ml-1 text-emerald-500 normal-case font-normal">(stock avg)</span>
-                                            )}
-                                        </FieldLabel>
-                                        <InputField
-                                            type="number" step="0.01"
-                                            value={core.insulation.freshPricePerKg || ''}
-                                            onChange={e => handleInsulationUpdate('freshPricePerKg', parseFloat(e.target.value) || 0)}
-                                            placeholder="0.00"
-                                            disabled={!core.insulation.materialId}
-                                        />
+                                        <FieldLabel>Fresh Density (g/cm³)</FieldLabel>
+                                        {
+                                            core?.insulation?.freshDensity || 0
+                                        }
                                     </div>
 
                                     {/* Fresh % - Auto-adjusts Reprocess % */}
@@ -1045,7 +1240,7 @@ const CoreComponent = ({
                                 <div className="flex gap-2 pt-1 border-t border-gray-100">
                                     <div className="flex-1 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
                                         <p className="text-xs text-gray-400">Core Area</p>
-                                        <p className="text-sm font-bold text-gray-700">{fmtN(core.totalCoreArea, 2)} mm²</p>
+                                        <p className="text-sm font-bold text-gray-700">{fmtN(core.conductor?.totalCoreArea || 0, 2)} mm²</p>
                                     </div>
                                     <div className="flex-1 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
                                         <p className="text-xs text-teal-500">Outer Area</p>
@@ -1057,7 +1252,7 @@ const CoreComponent = ({
                             </div>
                         )}
 
-                        {!core.hasInsulation && (
+                        {!core.insulation && (
                             <div className="px-4 py-8 bg-white text-center">
                                 <p className="text-sm text-gray-400">Check "Add Insulation" above to configure insulation for this core</p>
                             </div>
@@ -1073,7 +1268,7 @@ const CoreComponent = ({
                                 onRemove={removeProcess}
                                 onUpdateVariable={updateProcessVariable}
                                 processMasterList={processMasterList}
-                                quoteContext={quoteContext}
+                                quoteContext={coreContext}
                                 title={`Core ${index + 1} Processes`}
                                 compact={true}
                             />

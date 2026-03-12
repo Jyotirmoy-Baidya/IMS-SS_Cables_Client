@@ -120,10 +120,28 @@ const CreateQuotePage = () => {
 
 
     // Core management
-    const addCore = () => {
-        const newId = Math.max(...cores.map(c => c.id), 0) + 1;
-        // Add minimal core object - CoreComponent will provide defaults
-        setCores([...cores, { id: newId }]);
+    const addCore = async () => {
+        if (!quotationId) {
+            alert('No quotation ID found. Please refresh the page.');
+            return;
+        }
+
+        try {
+            // Create empty core in backend
+            const response = await api.post(`/quotation/${quotationId}/cores`, {
+                coreLength: cableLength
+            });
+
+            // Add returned core to state (with all backend defaults)
+            const newCore = {
+                ...response.data,
+                id: response.data._id // Frontend uses 'id', backend uses '_id'
+            };
+            setCores([...cores, newCore]);
+        } catch (error) {
+            console.error('Failed to create core:', error);
+            alert('Failed to create core: ' + (error.message || 'Unknown error'));
+        }
     };
 
     const deleteCore = (id) => {

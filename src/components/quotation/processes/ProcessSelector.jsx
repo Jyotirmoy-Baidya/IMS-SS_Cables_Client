@@ -89,11 +89,14 @@ const ProcessSelector = ({
     const [collapsed, setCollapsed] = useState({});
     const idCounterRef = useRef(0);
 
+    console.log(quoteContext);
 
+    console.log(processMasterList[0]);
 
     const buildEntry = (master) => {
         const variables = (master.variables || []).map(v => {
             const autoValue = v.source !== 'manual' ? (quoteContext[v.source] || 0) : null;
+            console.log(autoValue);
             return {
                 name: v.name,
                 label: v.label,
