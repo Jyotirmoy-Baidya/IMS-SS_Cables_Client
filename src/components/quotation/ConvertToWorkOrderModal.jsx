@@ -12,7 +12,7 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
     const [processAssignments, setProcessAssignments] = useState([]);
     const [materialRequirements, setMaterialRequirements] = useState([]);
     const [notes, setNotes] = useState('');
-    const { allProcesses, syncFromQuotation } = useQuotationProcessStore();
+    const { allProcesses, calculateAllProcessInQuotation } = useQuotationProcessStore();
     const { calculateAll } = useMaterialRequirementsStore();
 
     useEffect(() => {
@@ -21,7 +21,7 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                 setLoading(true);
 
                 // Sync all processes from quotation (cores, sheaths, and quote-level)
-                syncFromQuotation({
+                calculateAllProcessInQuotation({
                     cores: quotation.cores || [],
                     sheathGroups: quotation.sheathGroups || [],
                     quoteProcesses: quotation.quoteProcesses || []
@@ -58,7 +58,7 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                         // If process has context, match it exactly
                         if (process.context && p.context) {
                             return p.context.type === process.context.type &&
-                                   (p.context.coreIndex === process.context.coreIndex ||
+                                (p.context.coreIndex === process.context.coreIndex ||
                                     p.context.sheathIndex === process.context.sheathIndex);
                         }
 
@@ -168,7 +168,7 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
             // If process has context, match it exactly
             if (process.context && p.context) {
                 return p.context.type === process.context.type &&
-                       (p.context.coreIndex === process.context.coreIndex ||
+                    (p.context.coreIndex === process.context.coreIndex ||
                         p.context.sheathIndex === process.context.sheathIndex);
             }
 
@@ -350,8 +350,8 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                                                     </p>
                                                     {assignment.context && (
                                                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${assignment.context.type === 'core' ? 'bg-purple-100 text-purple-700' :
-                                                                assignment.context.type === 'sheath' ? 'bg-teal-100 text-teal-700' :
-                                                                    'bg-indigo-100 text-indigo-700'
+                                                            assignment.context.type === 'sheath' ? 'bg-teal-100 text-teal-700' :
+                                                                'bg-indigo-100 text-indigo-700'
                                                             }`}>
                                                             {assignment.context.label}
                                                         </span>

@@ -42,16 +42,17 @@ const evaluateFormula = (formula, variables) => {
 };
 
 const ManufacturingProcessSummary = ({ quotation }) => {
-    const { allProcesses, syncFromQuotation, getProcessesByCategory } = useQuotationProcessStore();
+    const {
+        allProcesses,
+        totalProcessCost,
+        calculateAllProcessInQuotation,
+        getProcessesByCategory
+    } = useQuotationProcessStore();
 
     // Sync store whenever quotation changes
     useEffect(() => {
         if (quotation) {
-            syncFromQuotation({
-                cores: quotation.cores || [],
-                sheathGroups: quotation.sheathGroups || [],
-                quoteProcesses: quotation.quoteProcesses || []
-            });
+            calculateAllProcessInQuotation(quotation);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [quotation.cores, quotation.sheathGroups, quotation.quoteProcesses]);
@@ -72,11 +73,6 @@ const ManufacturingProcessSummary = ({ quotation }) => {
             </div>
         );
     }
-
-    // Calculate total process cost
-    const totalProcessCost = allProcesses.reduce((sum, proc) => {
-        return sum + evaluateFormula(proc.formula, proc.variables);
-    }, 0);
 
     return (
         <div className="bg-white rounded-lg">
@@ -124,10 +120,11 @@ const ManufacturingProcessSummary = ({ quotation }) => {
                     const Icon = CATEGORY_ICONS[category] || Settings;
                     const colorClass = CATEGORY_COLORS[category] || CATEGORY_COLORS.general;
 
+                    // Calculate category cost from processCost field
                     const categoryCost = categoryProcesses.reduce((sum, proc) => {
-                        return sum + evaluateFormula(proc.formula, proc.variables);
+                        return sum + (proc.processCost || 0);
                     }, 0);
-
+                    console.log(category);
                     return (
                         <div key={category} className="space-y-3">
                             {/* Category Header */}
@@ -143,9 +140,8 @@ const ManufacturingProcessSummary = ({ quotation }) => {
                             {/* Processes in this category */}
                             <div className="space-y-2 pl-4">
                                 {categoryProcesses.map(proc => {
-                                    const cost = evaluateFormula(proc.formula, proc.variables);
                                     const contextBadge = CONTEXT_BADGES[proc.context.type] || CONTEXT_BADGES.quote;
-
+                                    console.log(proc);
                                     return (
                                         <div
                                             key={proc.id}
@@ -165,14 +161,33 @@ const ManufacturingProcessSummary = ({ quotation }) => {
                                                     )}
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="font-semibold text-sm">₹{cost.toFixed(2)}</div>
+                                                    <div className="font-semibold text-sm">₹{(proc.processCost || 0).toFixed(2)}</div>
                                                 </div>
                                             </div>
 
+                                            {/* Output Information */}
+                                            {proc.output && proc.output.outputType !== 'none' && (
+                                                <div className="text-xs bg-blue-50 border border-blue-200 px-2 py-1.5 rounded mb-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-blue-700 font-medium">
+                                                            Output: {proc.output.calculatedItemName || 'N/A'}
+                                                        </span>
+                                                        <span className="text-blue-600">
+                                                            {proc.output.calculatedQuantity || 0} {proc.output.unit || 'm'}
+                                                        </span>
+                                                    </div>
+                                                    {proc.output.calculatedSpecification && (
+                                                        <p className="text-blue-600 mt-1">{proc.output.calculatedSpecification}</p>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             {/* Formula */}
-                                            <div className="text-xs font-mono bg-white px-2 py-1 rounded border mb-2">
-                                                {proc.formula}
-                                            </div>
+                                            {proc.formula && (
+                                                <div className="text-xs font-mono bg-white px-2 py-1 rounded border mb-2">
+                                                    {proc.formula}
+                                                </div>
+                                            )}
 
                                             {/* Variables */}
                                             {proc.variables && proc.variables.length > 0 && (

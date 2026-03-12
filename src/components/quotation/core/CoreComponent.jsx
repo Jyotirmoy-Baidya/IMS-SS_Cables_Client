@@ -13,6 +13,7 @@ import InsulationSelector from '../insulation/InsulationSelector.jsx';
 import api from '../../../api/axiosInstance';
 import MaterialCostDisplay from './MaterialCostDisplay.jsx';
 import useMaterialRequirementsStore from '../../../store/materialRequirementsStore.js';
+import useQuotationProcessStore from '../../../store/quotationProcessStore.js';
 
 const fmtN = (n, d = 3) => Number(n || 0).toFixed(d);
 const fmtCur = (n) => '₹' + Number(n || 0).toFixed(2);
@@ -112,6 +113,7 @@ const CoreComponent = ({
     const [loadingProcesses, setLoadingProcesses] = useState(false);
 
     const { calculateAll } = useMaterialRequirementsStore();
+    const { calculateAllProcessInQuotation } = useQuotationProcessStore();
 
 
     // Fetch materials on mount
@@ -266,6 +268,7 @@ const CoreComponent = ({
                 }
             }));
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         core.conductor?.totalCoreArea,
         core.conductor?.wireCount,
@@ -348,7 +351,8 @@ const CoreComponent = ({
                 materialsRes.data.forEach(mat => {
                     pricingMap[mat._id] = {
                         avgPricePerKg: mat.inventory?.avgPricePerKg || 0,
-                        reprocessPricePerKg: mat.reprocessInventory?.pricePerKg || 0
+                        reprocessPricePerKg: mat.reprocessInventory?.pricePerKg || 0,
+                        materialName: mat.name
                     };
                 });
 
@@ -361,6 +365,7 @@ const CoreComponent = ({
                             : pricing.avgPricePerKg;
                         req.pricePerKg = pricePerKg;
                         req.totalCost = parseFloat((req.weight * pricePerKg).toFixed(2));
+                        req.materialName = pricing.materialName
                     }
                 });
             } catch (error) {
@@ -464,6 +469,7 @@ const CoreComponent = ({
     const handleProcessSave = (savedEntry) => {
         setProcessEntries(prev => [...prev, savedEntry]);
         setShowProcessEditor(false);
+        calculateAllProcessInQuotation(quotationId)
     };
 
     // Delete process entry
@@ -473,6 +479,7 @@ const CoreComponent = ({
         try {
             await api.delete(`/process-entry/delete-process-entry/${entryId}`);
             setProcessEntries(prev => prev.filter(e => e._id !== entryId));
+            calculateAllProcessInQuotation(quotationId)
         } catch (error) {
             console.error('Error deleting process entry:', error);
             alert('Failed to delete process entry');
@@ -622,7 +629,7 @@ const CoreComponent = ({
                         {isCollapsed ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
                     </button>
                     <button
-                        onClick={() => onDuplicate && onDuplicate(core.id)}
+                        onClick={() => onDuplicate && onDuplicate(core)}
                         className="p-1.5 rounded-lg text-blue-300 hover:text-white hover:bg-blue-600 transition-colors"
                         title="Duplicate core"
                     >

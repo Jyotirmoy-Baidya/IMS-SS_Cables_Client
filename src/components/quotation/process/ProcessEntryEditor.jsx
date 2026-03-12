@@ -238,6 +238,7 @@ const ProcessEntryEditor = ({ parentId, parentType, context = {}, onSave, onCanc
             if (response.success) {
                 onSave && onSave(response.data);
             }
+
         } catch (error) {
             console.error('Error saving process entry:', error);
             alert(error.message || 'Failed to save process entry');

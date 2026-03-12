@@ -14,6 +14,8 @@ import {
 } from '../utils/cableCalculations';
 import api from '../api/axiosInstance';
 import useMaterialRequirementsStore from '../store/materialRequirementsStore';
+import useQuotationStore from '../store/quotationStore';
+import CustomerSelector from '../components/quotation/basic/CustomerSelector';
 
 const evalFormula = (formula, variables) => {
     try {
@@ -31,104 +33,48 @@ const CreateQuotePage = () => {
     const { id: quoteId } = useParams();
     const navigate = useNavigate();
 
+
     // Shared cable length for all cores
     const [cableLength, setCableLength] = useState(100);
 
-    // DB raw materials data (for quote-level processes only - cores/sheaths fetch their own)
-    const [metalTypes, setMetalTypes] = useState([]);
-    const [insulationTypes, setInsulationTypes] = useState([]);
     const [processMasterList, setProcessMasterList] = useState([]);
 
     // Processes added to this quotation
     const [quoteProcesses, setQuoteProcesses] = useState([]);
 
     // Customer selection
-    const [customers, setCustomers] = useState([]);
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
 
-    // Profit margin
-    const [profitMarginPercent, setProfitMarginPercent] = useState(0);
 
     // Save state
     const [saving, setSaving] = useState(false);
-    const [quoteNumber, setQuoteNumber] = useState('');
 
-    // Quotation ID from URL params (always present in new workflow)
-    const quotationId = quoteId;
+    const {
+        quotation,
+        loading: quotationLoading,
+        error: quotationError,
+        fetchQuotationById,
+        addCore: addCoreToQuote,
+        removeCore: removeCoreFromQuote,
+        addSheath: addSheathToQuote,
+        removeSheath: removeSheathFromQuote
+    } = useQuotationStore();
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const requests = [
-                    api.get('/material-type/get-all-material-types'),
-                    api.get('/process/get-all-processes?isActive=true'),
-                    api.get('/customer/get-all-customer'),
-                ];
-                if (quoteId) requests.push(api.get(`/quotation/get-one-quotation/${quoteId}`));
-
-                const results = await Promise.all(requests);
-                const [typesRes, processRes, customerRes, quoteRes] = results;
-
-                const allTypes = typesRes.data || [];
-                setMetalTypes(allTypes.filter(t => t.category === 'metal'));
-                setInsulationTypes(allTypes.filter(t => t.category === 'insulation' || t.category === 'plastic'));
-                setProcessMasterList(processRes.data || []);
-                setCustomers(customerRes.data || []);
-
-                // Load existing quote for editing
-                if (quoteRes) {
-                    const q = quoteRes.data;
-                    setQuoteNumber(q.quoteNumber || '');
-                    setCableLength(q.cableLength || 100);
-
-                    // Convert cores from MongoDB format (_id) to frontend format (id)
-                    if (q.cores?.length) {
-                        const convertedCores = q.cores.map(core => ({
-                            ...core,
-                            id: core._id || core.id
-                        }));
-                        setCores(convertedCores);
-                    }
-
-                    // Convert sheathGroups from MongoDB format to frontend format
-                    if (q.sheathGroups?.length) {
-                        const convertedSheaths = q.sheathGroups.map(sg => ({
-                            ...sg,
-                            id: sg._id || sg.id,
-                            // Ensure coreIds and sheathIds are arrays of strings, not ObjectId instances
-                            coreIds: Array.isArray(sg.coreIds) ? sg.coreIds.map(id => String(id)) : [],
-                            sheathIds: Array.isArray(sg.sheathIds) ? sg.sheathIds.map(id => String(id)) : []
-                        }));
-                        setSheathGroups(convertedSheaths);
-                    }
-
-                    if (q.quoteProcesses?.length) setQuoteProcesses(q.quoteProcesses);
-                    setSelectedCustomerId(q.customerId?._id || q.customerId || '');
-                    setProfitMarginPercent(q.profitMarginPercent || 0);
-                }
-            } catch (err) {
-                console.error('Failed to load data for quotation:', err);
-            }
-        };
-        fetchData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        fetchQuotationById(quoteId);
     }, [quoteId]);
-
-    const [cores, setCores] = useState([]);
-
-    const [sheathGroups, setSheathGroups] = useState([]);
 
 
     // Core management
     const addCore = async () => {
-        if (!quotationId) {
+        if (!quoteId) {
             alert('No quotation ID found. Please refresh the page.');
             return;
         }
 
         try {
             // Create empty core in backend
-            const response = await api.post(`/quotation/${quotationId}/cores`, {
+            const response = await api.post(`/quotation/${quoteId}/cores`, {
                 coreLength: cableLength
             });
 
@@ -137,7 +83,7 @@ const CreateQuotePage = () => {
                 ...response.data,
                 id: response.data._id // Frontend uses 'id', backend uses '_id'
             };
-            setCores([...cores, newCore]);
+            addCoreToQuote(newCore)
         } catch (error) {
             console.error('Failed to create core:', error);
             alert('Failed to create core: ' + (error.message || 'Unknown error'));
@@ -145,31 +91,59 @@ const CreateQuotePage = () => {
     };
 
     const deleteCore = (id) => {
-        // Update local state - CoreComponent handles backend deletion
-        setCores(cores.filter(core => core.id !== id));
-        setSheathGroups(sheathGroups.map(sg => ({
-            ...sg,
-            coreIds: sg.coreIds.filter(cid => cid !== id)
-        })));
+        // Remove core from store - CoreComponent handles backend deletion
+        removeCoreFromQuote(id);
     };
 
-    const duplicateCore = (id) => {
-        const coreToDuplicate = cores.find(c => c.id === id);
-        if (!coreToDuplicate) return;
+    const duplicateCore = async (core) => {
+        if (!core) return;
+        try {
+            // Create empty core in backend
+            const response = await api.post(`/quotation/${quoteId}/cores`, {
+                ...core
+            });
+            console.log(response)
 
-        addCore();
+            // Add returned core to state (with all backend defaults)
+            const newCore = {
+                ...response.data,
+                id: response.data._id // Frontend uses 'id', backend uses '_id'
+            };
+            addCoreToQuote(newCore)
+        } catch (error) {
+            console.error('Failed to create core:', error);
+            alert('Failed to create core: ' + (error.message || 'Unknown error'));
+        }
     };
 
     // Sheath management
-    const addSheathGroup = () => {
-        const newId = Math.max(...sheathGroups.map(sg => sg.id), 0) + 1;
-        // Add minimal sheath object - SheathComponent will provide defaults
-        setSheathGroups([...sheathGroups, { id: newId }]);
+    const addSheathGroup = async () => {
+        if (!quoteId) {
+            alert('No quotation ID found. Please refresh the page.');
+            return;
+        }
+
+        try {
+            // Create empty sheath in backend
+            const response = await api.post(`/quotation/${quoteId}/sheaths`, {
+                sheathLength: cableLength
+            });
+
+            // Add returned sheath to store
+            const newSheath = {
+                ...response.data,
+                id: response.data._id
+            };
+            addSheathToQuote(newSheath);
+        } catch (error) {
+            console.error('Failed to create sheath:', error);
+            alert('Failed to create sheath: ' + (error.message || 'Unknown error'));
+        }
     };
 
     const deleteSheathGroup = (id) => {
-        // Update local state - SheathComponent handles backend deletion
-        setSheathGroups(sheathGroups.filter(sg => sg.id !== id));
+        // Remove sheath from store - SheathComponent handles backend deletion
+        removeSheathFromQuote(id);
     };
 
     // Process management
@@ -194,6 +168,7 @@ const CreateQuotePage = () => {
 
     // Quote context — auto-bound variable values from the current quote state
     const quoteContext = useMemo(() => {
+        const cores = quotation?.cores || [];
         const totalWireCount = cores.reduce((sum, c) => sum + (c.wireCount || 0), 0);
         const totalDrawingLength = cores.reduce((sum, c) =>
             sum + calculateDrawingLength(c.wireCount, cableLength), 0);
@@ -210,112 +185,39 @@ const CreateQuotePage = () => {
             totalMaterialWeight,
             totalCoreArea
         };
-    }, [cores, cableLength]);
-
-    // Memoized quotation object for MaterialSummary
-    const quotation = useMemo(() => ({
-        cores,
-        sheathGroups,
-        cableLength
-    }), [cores, sheathGroups, cableLength]);
+    }, [quotation?.cores, cableLength]);
 
 
     // Use material requirements store for all calculations
-    const materialStore = useMaterialRequirementsStore();
+    const { calculateAll, totalMaterialCost } = useMaterialRequirementsStore();
 
     // Recalculate whenever cores, sheaths, cable length, or material types change
     useEffect(() => {
-        const calculate = async () => {
-            await materialStore.calculateAll(
-                { cores, sheathGroups, cableLength },
-                { metalTypes, insulationTypes }
-            );
-        };
-        calculate();
+        calculateAll(quoteId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cores, sheathGroups, cableLength, metalTypes, insulationTypes]);
+    }, [quoteId]);
 
-    const totals = 0;
-
-    // Calculate total process cost from all sources (cores, sheaths, quote-level)
-    const totalProcessCost = useMemo(() => {
-        let cost = 0;
-        // Core processes
-        cores.forEach(core => {
-            (core.processes || []).forEach(p => {
-                cost += evalFormula(p.formula, p.variables);
-            });
-        });
-        // Sheath processes
-        sheathGroups.forEach(sheath => {
-            (sheath.processes || []).forEach(p => {
-                cost += evalFormula(p.formula, p.variables);
-            });
-        });
-        // Quote-level processes
-        quoteProcesses.forEach(p => {
-            cost += evalFormula(p.formula, p.variables);
-        });
-        return cost;
-    }, [cores, sheathGroups, quoteProcesses]);
 
     const handleSave = async (statusOverride) => {
         setSaving(true);
         try {
-            // Calculate total process cost from all sources: cores, sheaths, and quote-level
-            let processCost = 0;
 
-            // 1. Core processes
-            cores.forEach(core => {
-                (core.processes || []).forEach(p => {
-                    processCost += evalFormula(p.formula, p.variables);
-                });
-            });
-
-            // 2. Sheath processes
-            sheathGroups.forEach(sheath => {
-                (sheath.processes || []).forEach(p => {
-                    processCost += evalFormula(p.formula, p.variables);
-                });
-            });
-
-            // 3. Quote-level processes
-            quoteProcesses.forEach(p => {
-                processCost += evalFormula(p.formula, p.variables);
-            });
-
-            const grandTotal = totals.totalCost + processCost;
-            const profitAmount = grandTotal * (profitMarginPercent / 100);
-            const finalPrice = grandTotal + profitAmount;
-
-            // Sanitize sheathGroups to ensure coreIds and sheathIds are proper arrays
-            const sanitizedSheathGroups = sheathGroups.map(sg => ({
-                ...sg,
-                coreIds: Array.isArray(sg.coreIds) ? sg.coreIds : [],
-                sheathIds: Array.isArray(sg.sheathIds) ? sg.sheathIds : []
-            }));
-
-            if (!quotationId) {
+            if (!quoteId) {
                 throw new Error('No quotation ID found. Please refresh the page.');
             }
 
             const payload = {
                 customerId: selectedCustomerId || null,
                 cableLength,
-                // cores are managed separately via individual save buttons
-                sheathGroups: sanitizedSheathGroups,
-                quoteProcesses,
-                materialCost: totals.totalCost,
-                processCost,
-                grandTotal,
-                profitMarginPercent,
-                profitAmount,
-                finalPrice,
-                status: statusOverride || 'enquired'
+                status: statusOverride || 'enquired',
+                materialCost: 0,
+                processCost: 0,
+                grandTotal: 0,
+                notes: "Nothing",
             };
 
             // Update the quotation (cores already saved individually)
-            await api.patch(`/quotation/patch-quotation/${quotationId}`, payload);
+            await api.patch(`/quotation/patch-quotation/${quoteId}`, payload);
 
             navigate('/quotations');
         } catch (err) {
@@ -332,9 +234,11 @@ const CreateQuotePage = () => {
 
     useEffect(() => {
         const handleScroll = () => {
+            const cores = quotation?.cores || [];
+            const sheathGroups = quotation?.sheathGroups || [];
             const sections = [
-                ...cores.map(c => `core-${c.id}`),
-                ...sheathGroups.map(sg => `sheath-${sg.id}`),
+                ...cores.map(c => `core-${c._id}`),
+                ...sheathGroups.map(sg => `sheath-${sg._id}`),
                 'quotation-summary'
             ];
 
@@ -351,7 +255,7 @@ const CreateQuotePage = () => {
 
             // Check if first core has crossed center of screen
             if (cores.length > 0) {
-                const firstCore = document.getElementById(`core-${cores[0].id}`);
+                const firstCore = document.getElementById(`core-${cores[0]._id}`);
                 if (firstCore) {
                     const rect = firstCore.getBoundingClientRect();
                     // Show horizontal progress when first core crosses center (going up)
@@ -364,7 +268,7 @@ const CreateQuotePage = () => {
         handleScroll();
 
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [cores, sheathGroups]);
+    }, [quotation?.cores, quotation?.sheathGroups]);
 
     // Scroll to section helper
     const scrollToSection = (sectionId) => {
@@ -374,6 +278,48 @@ const CreateQuotePage = () => {
         }
     };
 
+    // Show loading state
+    if (quotationLoading) {
+        return (
+            <div className="w-full max-w-7xl mx-auto bg-gray-50 min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                    <p className="text-lg font-semibold text-gray-700">Loading quotation...</p>
+                    <p className="text-sm text-gray-500 mt-1">Please wait while we fetch the quotation details</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (quotationError) {
+        return (
+            <div className="w-full max-w-7xl mx-auto bg-gray-50 min-h-screen flex items-center justify-center">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md text-center">
+                    <div className="text-red-600 text-5xl mb-4">⚠️</div>
+                    <h2 className="text-xl font-bold text-red-800 mb-2">Error Loading Quotation</h2>
+                    <p className="text-sm text-red-600 mb-4">{quotationError}</p>
+                    <div className="flex gap-3 justify-center">
+                        <button
+                            onClick={() => navigate('/quotations')}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium"
+                        >
+                            Back to Quotations
+                        </button>
+                        <button
+                            onClick={() => fetchQuotationById(quoteId, true)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    console.log(quotation);
+
     return (
         <div className="w-full max-w-7xl mx-auto bg-gray-50 relative">
             {/* Horizontal Progress Bar - Appears after first core crosses center */}
@@ -381,12 +327,12 @@ const CreateQuotePage = () => {
                 }`}>
                 <div className="max-w-7xl mx-auto px-4 py-2">
                     <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
-                        {cores.map((core, idx) => {
-                            const sectionId = `core-${core.id}`;
+                        {(quotation?.cores || []).map((core, idx) => {
+                            const sectionId = `core-${core._id}`;
                             const isActive = activeSection === sectionId;
                             return (
                                 <button
-                                    key={core.id}
+                                    key={core._id}
                                     onClick={() => scrollToSection(sectionId)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${isActive
                                         ? 'bg-blue-600 text-white shadow-sm'
@@ -399,12 +345,12 @@ const CreateQuotePage = () => {
                                 </button>
                             );
                         })}
-                        {sheathGroups.map((sg, idx) => {
-                            const sectionId = `sheath-${sg.id}`;
+                        {(quotation?.sheathGroups || []).map((sg, idx) => {
+                            const sectionId = `sheath-${sg._id}`;
                             const isActive = activeSection === sectionId;
                             return (
                                 <button
-                                    key={sg.id}
+                                    key={sg._id}
                                     onClick={() => scrollToSection(sectionId)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${isActive
                                         ? 'bg-teal-600 text-white shadow-sm'
@@ -457,7 +403,7 @@ const CreateQuotePage = () => {
                         </button>
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">
-                                {quoteId ? `Edit Quotation${quoteNumber ? ` · ${quoteNumber}` : ''}` : 'New Cable Quotation'}
+                                {quoteId ? `Edit Quotation${quotation.quoteNumber ? ` · ${quotation.quoteNumber}` : ''}` : 'New Cable Quotation'}
                             </h1>
                             <p className="text-sm text-gray-500 mt-0.5">
                                 Comprehensive calculator for multi-core wire and cable manufacturing
@@ -492,40 +438,10 @@ const CreateQuotePage = () => {
                 </div>
 
                 {/* Customer Selection */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-                    <div className="flex items-start gap-4">
-                        <div className="flex-1">
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                Customer
-                            </label>
-                            <select
-                                value={selectedCustomerId}
-                                onChange={e => setSelectedCustomerId(e.target.value)}
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                            >
-                                <option value="">— Select customer (optional) —</option>
-                                {customers.filter(c => c.isActive !== false).map(c => (
-                                    <option key={c._id} value={c._id}>{c.companyName}</option>
-                                ))}
-                            </select>
-                        </div>
-                        {selectedCustomerId && (() => {
-                            const c = customers.find(x => x._id === selectedCustomerId);
-                            if (!c) return null;
-                            const primary = c.contacts?.find(ct => ct.isPrimary) || c.contacts?.[0];
-                            return (
-                                <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-600 min-w-48">
-                                    <p className="font-semibold text-gray-800 mb-1">{c.companyName}</p>
-                                    {c.address?.city && (
-                                        <p>{c.address.city}{c.address.state ? `, ${c.address.state}` : ''}</p>
-                                    )}
-                                    {primary?.phone && <p>{primary.phone}</p>}
-                                    {primary?.email && <p className="truncate">{primary.email}</p>}
-                                </div>
-                            );
-                        })()}
-                    </div>
-                </div>
+                <CustomerSelector
+                    selectedCustomerId={selectedCustomerId}
+                    setSelectedCustomerId={setSelectedCustomerId}
+                />
 
                 {/* Shared Cable Length */}
                 <div className="bg-linear-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-5 mb-8 mt-8">
@@ -574,13 +490,13 @@ const CreateQuotePage = () => {
                     </button>
                 </div>
 
-                {cores.map((core, idx) => (
+                {(quotation?.cores || []).map((core, idx) => (
                     <CoreComponent
-                        key={idx}
+                        key={core._id || idx}
                         core={core}
                         index={idx}
                         cableLength={cableLength}
-                        quotationId={quotationId}
+                        quotationId={quoteId}
                         onDeleteFromParent={deleteCore}
                         onDuplicate={duplicateCore}
                     />
@@ -605,15 +521,15 @@ const CreateQuotePage = () => {
                     </button>
                 </div>
 
-                {sheathGroups.map((sg, idx) => (
+                {(quotation?.sheathGroups || []).map((sg, idx) => (
                     <SheathComponent
-                        key={idx}
+                        key={sg._id || idx}
                         sheathGroup={sg}
                         index={idx}
                         cableLength={cableLength}
-                        quotationId={quotationId}
-                        cores={cores}
-                        sheathGroups={sheathGroups}
+                        quotationId={quoteId}
+                        cores={quotation?.cores || []}
+                        sheathGroups={quotation?.sheathGroups || []}
                         onDeleteFromParent={deleteSheathGroup}
                     />
                 ))}
@@ -633,11 +549,7 @@ const CreateQuotePage = () => {
                 {/* Manufacturing Process Summary - Aggregated view of all processes */}
                 <div className="mt-8">
                     <ManufacturingProcessSummary
-                        quotation={{
-                            cores,
-                            sheathGroups,
-                            quoteProcesses
-                        }}
+                        quotation={quotation}
                     />
                 </div>
 
@@ -646,10 +558,7 @@ const CreateQuotePage = () => {
 
                 {/* Quotation Summary */}
                 <QuotationSummary
-                    totals={totals}
-                    totalProcessCost={totalProcessCost}
-                    profitMarginPercent={profitMarginPercent}
-                    onProfitMarginChange={setProfitMarginPercent}
+                    totalMaterialCost={totalMaterialCost}
                 />
             </div>
         </div>

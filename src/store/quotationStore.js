@@ -10,7 +10,7 @@ const useQuotationStore = create((set, get) => ({
     quotation: null,
 
     // Loading state
-    loading: false,
+    loading: true,
 
     // Error state
     error: null,
@@ -20,7 +20,7 @@ const useQuotationStore = create((set, get) => ({
      * @param {String} quotationId - The quotation ID to fetch
      * @param {Boolean} forceRefresh - Force refresh even if already loaded
      */
-    fetchQuotation: async (quotationId, forceRefresh = false) => {
+    fetchQuotationById: async (quotationId, forceRefresh = false) => {
         if (!quotationId) {
             console.error('quotationId is required');
             set({ quotation: null, error: 'Quotation ID is required' });
@@ -34,11 +34,10 @@ const useQuotationStore = create((set, get) => ({
         }
 
         set({ loading: true, error: null });
-
         try {
-            const response = await api.get(`/quotation/${quotationId}`);
+            const response = await api.get(`/quotation/get-one-quotation/${quotationId}`);
             const fetchedQuotation = response.data || null;
-
+            console.log(fetchedQuotation);
             set({ quotation: fetchedQuotation, loading: false, error: null });
             return fetchedQuotation;
         } catch (error) {

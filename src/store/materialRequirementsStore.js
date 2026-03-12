@@ -12,6 +12,8 @@ const useMaterialRequirementsStore = create((set, get) => ({
     // Raw breakdown by usage
     breakdown: [],
 
+    totalMaterialCost: 0,
+
     /**
      * Extract and aggregate material requirements from quotation cores and sheaths
      * Can accept either quotation ID (string) to fetch from backend, or quotation object directly
@@ -42,12 +44,12 @@ const useMaterialRequirementsStore = create((set, get) => ({
 
             // Flatten all materialRequired arrays from cores using flatMap
             // Include core name and coreNumber in each material requirement
-            const materialsRequiredInQuotation = cores.flatMap(core =>
-                (core.materialRequired || []).map(material => ({
+            const materialsRequiredInQuotation = cores.flatMap(core => {
+                return (core.materialRequired || []).map(material => ({
                     ...material,
-                    coreName: `Core - ${core.coreNumber}`
+                    usedIn: `Core - ${core.coreNumber}`
                 }))
-            )
+            })
 
             // ═══════════════════════════════════════════════════════
             // EXTRACT MATERIAL REQUIREMENTS FROM SHEATH GROUPS
@@ -97,9 +99,13 @@ const useMaterialRequirementsStore = create((set, get) => ({
                 });
             });
 
+            // Calculate total material cost
+            const totalMaterialCost = materialsRequiredInQuotation.reduce(
+                (sum, material) => sum + (material.totalCost || 0),
+                0
+            );
 
-
-            set({ materialsRequiredInQuotation, breakdown });
+            set({ materialsRequiredInQuotation, breakdown, totalMaterialCost });
             return materialsRequiredInQuotation;
         } catch (error) {
             console.error('Error fetching quotation or calculating materials:', error);
