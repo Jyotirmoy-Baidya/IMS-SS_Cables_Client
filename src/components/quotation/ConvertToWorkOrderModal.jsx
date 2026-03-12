@@ -8,11 +8,12 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(true);
     const [converting, setConverting] = useState(false);
     const [allEmployees, setAllEmployees] = useState([]);
+    const [allProcesses, setAllProcesses] = useState([]);
     const [allLocations, setAllLocations] = useState([]);
     const [processAssignments, setProcessAssignments] = useState([]);
     const [materialRequirements, setMaterialRequirements] = useState([]);
     const [notes, setNotes] = useState('');
-    const { allProcesses, calculateAllProcessInQuotation } = useQuotationProcessStore();
+    const { calculateAllProcessInQuotation } = useQuotationProcessStore();
     const { calculateAll } = useMaterialRequirementsStore();
 
     useEffect(() => {
@@ -21,11 +22,9 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                 setLoading(true);
 
                 // Sync all processes from quotation (cores, sheaths, and quote-level)
-                calculateAllProcessInQuotation({
-                    cores: quotation.cores || [],
-                    sheathGroups: quotation.sheathGroups || [],
-                    quoteProcesses: quotation.quoteProcesses || []
-                });
+                const allProcessesCalc = await calculateAllProcessInQuotation(quotation);
+                console.log(allProcesses);
+                setAllProcesses(allProcessesCalc);
 
                 // Calculate material requirements
                 const materials = await calculateAll(quotation);
@@ -40,15 +39,15 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                 const locations = locRes.data || [];
                 setAllEmployees(employees);
                 setAllLocations(locations);
-                console.log(allProcesses);
+                console.log("eeee", allProcessesCalc);
                 // Get unique processes from the store
-                const uniqueProcesses = getUniqueProcesses(allProcesses);
+                // const uniqueProcesses = getUniqueProcesses(allProcesses);
 
                 // Initialize process assignments
-                const assignments = uniqueProcesses.map(process => {
+                const assignments = allProcessesCalc.map(process => {
                     // Find employees who have this process
                     const eligibleEmployees = employees.filter(emp =>
-                        emp.processes?.some(p => (typeof p === 'object' ? p._id : p) === process._id)
+                        emp.processes?.some(p => (typeof p === 'object' ? p._id : p) === process.processId._id)
                     );
 
                     // Get full process data from allProcesses - match by processId AND context

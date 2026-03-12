@@ -23,7 +23,6 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
             // (materialRequired arrays are pre-calculated on backend when quotation is saved)
             const requirements = await calculateAll(quotation);
 
-
             if (requirements.length === 0) {
                 setError('No materials found in quotation');
                 return;
@@ -32,7 +31,7 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
             // Transform requirements to API format
             const materialRequirements = requirements.map(req => ({
                 materialId: req.materialId,
-                requiredWeight: req.totalWeight
+                requiredWeight: req.weight
             }));
             console.log(materialRequirements);
             // Check availability for these materials

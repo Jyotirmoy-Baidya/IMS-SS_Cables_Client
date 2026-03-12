@@ -51,6 +51,8 @@ const useMaterialRequirementsStore = create((set, get) => ({
                 }))
             })
 
+            console.log(materialsRequiredInQuotation);
+
             // ═══════════════════════════════════════════════════════
             // EXTRACT MATERIAL REQUIREMENTS FROM SHEATH GROUPS
             // ═══════════════════════════════════════════════════════
@@ -106,6 +108,8 @@ const useMaterialRequirementsStore = create((set, get) => ({
             );
 
             set({ materialsRequiredInQuotation, breakdown, totalMaterialCost });
+
+            console.log("materialsssss", materialsRequiredInQuotation)
             return materialsRequiredInQuotation;
         } catch (error) {
             console.error('Error fetching quotation or calculating materials:', error);

@@ -2,17 +2,18 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Plus, Search, Pencil, Trash2, FileText,
-    MapPin, Calendar, Truck, StickyNote, X, Check, ClipboardCheck
+    MapPin, Calendar, Truck, StickyNote, X, Check, ClipboardCheck, ChevronDown, ChevronRight
 } from 'lucide-react';
 import api from '../api/axiosInstance';
 import ConvertToWorkOrderModal from '../components/quotation/ConvertToWorkOrderModal';
 import MaterialPreFlightModal from '../components/workOrder/MaterialPreFlightModal';
+import QuotePriceManager from '../components/quotation/QuotePriceManager';
 
 const STATUS_CONFIG = {
-    enquired: { label: 'Enquired',  bg: 'bg-blue-100',   text: 'text-blue-700'   },
-    pending:  { label: 'Pending',   bg: 'bg-amber-100',  text: 'text-amber-700'  },
-    approved: { label: 'Approved',  bg: 'bg-emerald-100',text: 'text-emerald-700'},
-    rejected: { label: 'Rejected',  bg: 'bg-red-100',    text: 'text-red-700'    },
+    enquired: { label: 'Enquired', bg: 'bg-blue-100', text: 'text-blue-700' },
+    pending: { label: 'Pending', bg: 'bg-amber-100', text: 'text-amber-700' },
+    approved: { label: 'Approved', bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    rejected: { label: 'Rejected', bg: 'bg-red-100', text: 'text-red-700' },
 };
 
 const DELIVERY_TYPES = ['drum', 'bobbin', 'coil', 'packed', 'other'];
@@ -27,6 +28,7 @@ const QuotationsPage = () => {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [creatingNew, setCreatingNew] = useState(false);
+    const [expandedRows, setExpandedRows] = useState(new Set());
 
     // Notes modal state
     const [notesModal, setNotesModal] = useState(null); // { quotation }
@@ -113,16 +115,16 @@ const QuotationsPage = () => {
     const openNotesModal = (quotation) => {
         setNotesModal(quotation);
         setNotesForm({
-            deliveryType:    quotation.deliveryType    || '',
+            deliveryType: quotation.deliveryType || '',
             deliveryQuantity: quotation.deliveryQuantity || '',
             expectedDelivery: quotation.expectedDelivery
                 ? new Date(quotation.expectedDelivery).toISOString().slice(0, 10)
                 : '',
             sameAsCustomerAddress: quotation.sameAsCustomerAddress || false,
             deliveryAddress: {
-                line1:   quotation.deliveryAddress?.line1   || '',
-                city:    quotation.deliveryAddress?.city    || '',
-                state:   quotation.deliveryAddress?.state   || '',
+                line1: quotation.deliveryAddress?.line1 || '',
+                city: quotation.deliveryAddress?.city || '',
+                state: quotation.deliveryAddress?.state || '',
                 pincode: quotation.deliveryAddress?.pincode || '',
                 country: quotation.deliveryAddress?.country || 'India',
             },
@@ -136,9 +138,9 @@ const QuotationsPage = () => {
             if (checked && notesModal?.customerId?.address) {
                 const addr = notesModal.customerId.address;
                 updated.deliveryAddress = {
-                    line1:   addr.line1   || '',
-                    city:    addr.city    || '',
-                    state:   addr.state   || '',
+                    line1: addr.line1 || '',
+                    city: addr.city || '',
+                    state: addr.state || '',
                     pincode: addr.pincode || '',
                     country: addr.country || 'India',
                 };
@@ -151,12 +153,12 @@ const QuotationsPage = () => {
         setSavingNotes(true);
         try {
             const res = await api.patch(`/quotation/patch-quotation/${notesModal._id}`, {
-                deliveryType:          notesForm.deliveryType,
-                deliveryQuantity:      notesForm.deliveryQuantity,
-                expectedDelivery:      notesForm.expectedDelivery || null,
+                deliveryType: notesForm.deliveryType,
+                deliveryQuantity: notesForm.deliveryQuantity,
+                expectedDelivery: notesForm.expectedDelivery || null,
                 sameAsCustomerAddress: notesForm.sameAsCustomerAddress,
-                deliveryAddress:       notesForm.deliveryAddress,
-                notes:                 notesForm.notes,
+                deliveryAddress: notesForm.deliveryAddress,
+                notes: notesForm.notes,
             });
             setQuotations(prev => prev.map(q => q._id === notesModal._id ? res.data : q));
             setNotesModal(null);
@@ -174,6 +176,19 @@ const QuotationsPage = () => {
             q.customerId?.companyName?.toLowerCase().includes(search.toLowerCase());
         return matchStatus && matchSearch;
     });
+
+    // Toggle row expansion
+    const toggleRowExpansion = (quotationId) => {
+        setExpandedRows(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(quotationId)) {
+                newSet.delete(quotationId);
+            } else {
+                newSet.add(quotationId);
+            }
+            return newSet;
+        });
+    };
 
     if (loading) return (
         <div className="flex items-center justify-center h-64 text-gray-400">
@@ -215,11 +230,10 @@ const QuotationsPage = () => {
                         <button
                             key={s}
                             onClick={() => setStatusFilter(s)}
-                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-colors ${
-                                statusFilter === s
-                                    ? 'bg-slate-800 text-white'
-                                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                            }`}
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-colors ${statusFilter === s
+                                ? 'bg-slate-800 text-white'
+                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                }`}
                         >
                             {s === 'all' ? 'All' : STATUS_CONFIG[s].label}
                         </button>
@@ -268,140 +282,169 @@ const QuotationsPage = () => {
                                 </td>
                             </tr>
                         ) : filtered.map(q => (
-                            <tr key={q._id} className="hover:bg-gray-50 transition-colors">
-                                {/* Quote # */}
-                                <td className="px-4 py-3">
-                                    <div className="font-mono text-xs font-semibold text-gray-700">
-                                        {q.quoteNumber}
-                                    </div>
-                                    {q.workOrderId && (
-                                        <div className="flex items-center gap-1 mt-1">
-                                            <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">
-                                                WO: {q.workOrderId.workOrderNumber}
-                                            </span>
-                                        </div>
-                                    )}
-                                </td>
-
-                                {/* Customer */}
-                                <td className="px-4 py-3">
-                                    {q.customerId ? (
-                                        <div>
-                                            <p className="font-medium text-gray-800 text-sm">{q.customerId.companyName}</p>
-                                            {q.customerId.address?.city && (
-                                                <p className="text-xs text-gray-400 mt-0.5">
-                                                    {q.customerId.address.city}
-                                                    {q.customerId.address.state ? `, ${q.customerId.address.state}` : ''}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <span className="text-gray-400 text-xs italic">No customer</span>
-                                    )}
-                                </td>
-
-                                {/* Length */}
-                                <td className="px-4 py-3 text-right text-sm text-gray-600">
-                                    {q.cableLength?.toLocaleString()} m
-                                </td>
-
-                                {/* Material cost */}
-                                <td className="px-4 py-3 text-right text-sm text-gray-700">
-                                    {fmtINR(q.materialCost)}
-                                </td>
-
-                                {/* Process cost */}
-                                <td className="px-4 py-3 text-right text-sm text-gray-700">
-                                    {q.processCost > 0 ? fmtINR(q.processCost) : <span className="text-gray-300">—</span>}
-                                </td>
-
-                                {/* Profit % */}
-                                <td className="px-4 py-3 text-right">
-                                    {q.profitMarginPercent > 0 ? (
-                                        <span className="text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">
-                                            {q.profitMarginPercent}%
-                                        </span>
-                                    ) : (
-                                        <span className="text-gray-300 text-xs">—</span>
-                                    )}
-                                </td>
-
-                                {/* Final price */}
-                                <td className="px-4 py-3 text-right">
-                                    <span className="text-sm font-bold text-emerald-700">{fmtINR(q.finalPrice)}</span>
-                                </td>
-
-                                {/* Status */}
-                                <td className="px-4 py-3 text-center">
-                                    <select
-                                        value={q.status}
-                                        onChange={e => handleStatusChange(q._id, e.target.value)}
-                                        className={`px-2.5 py-1 text-xs font-semibold rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-200 ${STATUS_CONFIG[q.status]?.bg} ${STATUS_CONFIG[q.status]?.text}`}
-                                    >
-                                        {Object.keys(STATUS_CONFIG).map(s => (
-                                            <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
-                                        ))}
-                                    </select>
-                                </td>
-
-                                {/* Date */}
-                                <td className="px-4 py-3 text-xs text-gray-500">
-                                    <div>{new Date(q.createdAt).toLocaleDateString('en-IN')}</div>
-                                    {q.deliveryType && (
-                                        <div className="flex items-center gap-1 mt-0.5 text-gray-400">
-                                            <Truck size={10} />
-                                            <span className="capitalize">{q.deliveryType}</span>
-                                        </div>
-                                    )}
-                                    {q.expectedDelivery && (
-                                        <div className="flex items-center gap-1 mt-0.5 text-gray-400">
-                                            <Calendar size={10} />
-                                            <span>{new Date(q.expectedDelivery).toLocaleDateString('en-IN')}</span>
-                                        </div>
-                                    )}
-                                </td>
-
-                                {/* Actions */}
-                                <td className="px-4 py-3">
-                                    <div className="flex items-center justify-end gap-1">
-                                        <button
-                                            onClick={() => openNotesModal(q)}
-                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
-                                            title="Delivery Notes"
-                                        >
-                                            <StickyNote size={15} />
-                                        </button>
-                                        {q.status === 'approved' && (
+                            <>
+                                <tr key={q._id} className="hover:bg-gray-50 transition-colors">
+                                    {/* Quote # with expand button */}
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2">
                                             <button
-                                                onClick={() => !q.workOrderId && setPreflightModal(q)}
-                                                disabled={!!q.workOrderId}
-                                                className={`p-1.5 rounded-md ${
-                                                    q.workOrderId
+                                                onClick={() => toggleRowExpansion(q._id)}
+                                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                                title={expandedRows.has(q._id) ? 'Collapse' : 'Expand to manage pricing'}
+                                            >
+                                                {expandedRows.has(q._id) ? (
+                                                    <ChevronDown size={16} className="text-indigo-600" />
+                                                ) : (
+                                                    <ChevronRight size={16} className="text-gray-400" />
+                                                )}
+                                            </button>
+                                            <div>
+                                                <div className="font-mono text-xs font-semibold text-gray-700">
+                                                    {q.quoteNumber}
+                                                </div>
+                                                {q.workOrderId && (
+                                                    <div className="flex items-center gap-1 mt-1">
+                                                        <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">
+                                                            WO: {q.workOrderId.workOrderNumber}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    {/* Customer */}
+                                    <td className="px-4 py-3">
+                                        {q.customerId ? (
+                                            <div>
+                                                <p className="font-medium text-gray-800 text-sm">{q.customerId.companyName}</p>
+                                                {q.customerId.address?.city && (
+                                                    <p className="text-xs text-gray-400 mt-0.5">
+                                                        {q.customerId.address.city}
+                                                        {q.customerId.address.state ? `, ${q.customerId.address.state}` : ''}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-gray-400 text-xs italic">No customer</span>
+                                        )}
+                                    </td>
+
+                                    {/* Length */}
+                                    <td className="px-4 py-3 text-right text-sm text-gray-600">
+                                        {q.cableLength?.toLocaleString()} m
+                                    </td>
+
+                                    {/* Material cost */}
+                                    <td className="px-4 py-3 text-right text-sm text-gray-700">
+                                        {fmtINR(q.materialCost)}
+                                    </td>
+
+                                    {/* Process cost */}
+                                    <td className="px-4 py-3 text-right text-sm text-gray-700">
+                                        {q.processCost > 0 ? fmtINR(q.processCost) : <span className="text-gray-300">—</span>}
+                                    </td>
+
+                                    {/* Profit % */}
+                                    <td className="px-4 py-3 text-right">
+                                        {q.profitMarginPercent > 0 ? (
+                                            <span className="text-xs font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">
+                                                {q.profitMarginPercent}%
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-300 text-xs">—</span>
+                                        )}
+                                    </td>
+
+                                    {/* Final price */}
+                                    <td className="px-4 py-3 text-right">
+                                        <span className="text-sm font-bold text-emerald-700">{fmtINR(q.finalPrice)}</span>
+                                    </td>
+
+                                    {/* Status */}
+                                    <td className="px-4 py-3 text-center">
+                                        <select
+                                            value={q.status}
+                                            onChange={e => handleStatusChange(q._id, e.target.value)}
+                                            className={`px-2.5 py-1 text-xs font-semibold rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-200 ${STATUS_CONFIG[q.status]?.bg} ${STATUS_CONFIG[q.status]?.text}`}
+                                        >
+                                            {Object.keys(STATUS_CONFIG).map(s => (
+                                                <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+                                            ))}
+                                        </select>
+                                    </td>
+
+                                    {/* Date */}
+                                    <td className="px-4 py-3 text-xs text-gray-500">
+                                        <div>{new Date(q.createdAt).toLocaleDateString('en-IN')}</div>
+                                        {q.deliveryType && (
+                                            <div className="flex items-center gap-1 mt-0.5 text-gray-400">
+                                                <Truck size={10} />
+                                                <span className="capitalize">{q.deliveryType}</span>
+                                            </div>
+                                        )}
+                                        {q.expectedDelivery && (
+                                            <div className="flex items-center gap-1 mt-0.5 text-gray-400">
+                                                <Calendar size={10} />
+                                                <span>{new Date(q.expectedDelivery).toLocaleDateString('en-IN')}</span>
+                                            </div>
+                                        )}
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button
+                                                onClick={() => openNotesModal(q)}
+                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
+                                                title="Delivery Notes"
+                                            >
+                                                <StickyNote size={15} />
+                                            </button>
+                                            {q.status === 'approved' && (
+                                                <button
+                                                    onClick={() => !q.workOrderId && setPreflightModal(q._id)}
+                                                    disabled={!!q.workOrderId}
+                                                    className={`p-1.5 rounded-md ${q.workOrderId
                                                         ? 'text-gray-300 cursor-not-allowed'
                                                         : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'
-                                                }`}
-                                                title={q.workOrderId ? 'Already converted to work order' : 'Convert to Work Order'}
+                                                        }`}
+                                                    title={q.workOrderId ? 'Already converted to work order' : 'Convert to Work Order'}
+                                                >
+                                                    <ClipboardCheck size={15} />
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => navigate(`/quotation/edit/${q._id}`)}
+                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
+                                                title="Edit Quotation"
                                             >
-                                                <ClipboardCheck size={15} />
+                                                <Pencil size={15} />
                                             </button>
-                                        )}
-                                        <button
-                                            onClick={() => navigate(`/quotation/edit/${q._id}`)}
-                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
-                                            title="Edit Quotation"
-                                        >
-                                            <Pencil size={15} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(q._id)}
-                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md"
-                                            title="Delete"
-                                        >
-                                            <Trash2 size={15} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+                                            <button
+                                                onClick={() => handleDelete(q._id)}
+                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                {/* Expanded row for QuotePriceManager */}
+                                {expandedRows.has(q._id) && (
+                                    <tr key={`${q._id}-expanded`}>
+                                        <td colSpan="10" className="p-0">
+                                            <QuotePriceManager
+                                                quotationId={q._id}
+                                                baseMaterialCost={q.materialCost || 0}
+                                                baseProcessCost={q.processCost || 0}
+                                            />
+                                        </td>
+                                    </tr>
+                                )}
+                            </>
                         ))}
                     </tbody>
                 </table>

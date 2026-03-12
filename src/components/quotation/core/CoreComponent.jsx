@@ -206,11 +206,11 @@ const CoreComponent = ({
             const wireDiameter = 2 * Math.sqrt(areaPerWire / Math.PI);
 
             // Calculate conductor diameter (stranded wire packing)
-            const calculateCoreDiam = (wireDia, wCount) => {
-                if (wCount === 1) return wireDia;
-                return Math.sqrt(wCount) * wireDia / 2;
-            };
-            const conductorDiameter = calculateCoreDiam(wireDiameter, wireCount);
+            // const calculateCoreDiam = (wireDia, wCount) => {
+            //     if (wCount === 1) return wireDia;
+            //     return Math.sqrt(wCount) * wireDia / 2;
+            // };
+            const conductorDiameter = Math.sqrt((4 * totalCoreArea) / Math.PI)
 
             // Calculate drawing length
             const drawingLength = effectiveLength * wireCount;
@@ -387,7 +387,7 @@ const CoreComponent = ({
         try {
             // Build material requirements with pricing
             const materialRequired = await buildMaterialRequirements(core);
-
+            console.log(core.conductor.conductorDiameter, "test", calculateOuterArea(core.conductor.conductorDiameter + (core.insulation?.thickness || 0) + (core.insulation?.thickness || 0)).toFixed(2));
             // Prepare core data with material requirements and costs
             const coreData = {
                 ...core,
