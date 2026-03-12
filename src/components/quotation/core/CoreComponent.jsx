@@ -104,12 +104,10 @@ const CoreComponent = ({
     // Material data
     const [metalTypes, setMetalTypes] = useState([]);
     const [insulationTypes, setInsulationTypes] = useState([]);
-    const [metalRawMaterials, setMetalRawMaterials] = useState([]);
     const [insulationRawMaterials, setInsulationRawMaterials] = useState([]);
     const [processMasterList, setProcessMasterList] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const [selectedRodState, setSelectedRodState] = useState();
 
     // Fetch materials and processes on mount
     useEffect(() => {
@@ -125,7 +123,6 @@ const CoreComponent = ({
                 const allTypes = typesRes.data || [];
                 setMetalTypes(allTypes.filter(t => t.category === 'metal'));
                 setInsulationTypes(allTypes.filter(t => t.category === 'insulation' || t.category === 'plastic'));
-                setMetalRawMaterials(metalMatRes.data || []);
                 const allMats = insulMatRes.data || [];
                 setInsulationRawMaterials(allMats.filter(m => m.category === 'insulation' || m.category === 'plastic'));
                 setProcessMasterList(processRes.data || []);
@@ -540,7 +537,6 @@ const CoreComponent = ({
 
     const handleRodSelect = (rod) => {
         setIsSaved(false);
-        setSelectedRodState();
         setCore(prev => ({
             ...prev,
             conductor: {
@@ -570,16 +566,31 @@ const CoreComponent = ({
         }
         const type = insulationTypes.find(t => t._id === typeId);
         if (!type) return;
-        console.log("type", type);
-        setCore(prev => ({
-            ...prev,
-            insulation: {
-                ...prev.insulation,
-                freshMaterialTypeId: typeId,
-                freshMaterialId: null,
-                freshDensity: type.density
-            }
-        }));
+        if (core?.insulation?.reprocessMaterialTypeId) {
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    freshMaterialTypeId: typeId,
+                    freshMaterialId: null,
+                    freshDensity: type.density
+                }
+            }));
+        }
+        else {
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    freshMaterialTypeId: typeId,
+                    freshMaterialId: null,
+                    freshDensity: type.density,
+                    reprocessMaterialTypeId: typeId,
+                    reprocessMaterialId: null,
+                    reprocessDensity: type.density
+                }
+            }));
+        }
     };
 
     const handleInsulationMaterialSelect = (materialId) => {
@@ -597,13 +608,25 @@ const CoreComponent = ({
         }
         const material = insulationRawMaterials.find(m => m._id === materialId);
         if (!material) return;
-        setCore(prev => ({
-            ...prev,
-            insulation: {
-                ...prev.insulation,
-                freshMaterialId: material._id
-            }
-        }));
+        if (core?.insulation?.reprocessMaterialId) {
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    freshMaterialId: material._id
+                }
+            }));
+        }
+        else {
+            setCore(prev => ({
+                ...prev,
+                insulation: {
+                    ...prev.insulation,
+                    freshMaterialId: material._id,
+                    reprocessMaterialId: material._id,
+                }
+            }));
+        }
     };
 
     const handleReprocessTypeSelect = (typeId) => {
@@ -1187,23 +1210,6 @@ const CoreComponent = ({
                                         )}
                                     </div>
 
-                                    {/* Reprocess Price */}
-                                    <div>
-                                        <FieldLabel>
-                                            Reprocess Price/kg (₹)
-                                            {core.insulation.reprocessPricePerKg > 0 && (
-                                                <span className="ml-1 text-purple-500 normal-case font-normal">(stock)</span>
-                                            )}
-                                        </FieldLabel>
-                                        <InputField
-                                            type="number" step="0.01"
-                                            value={core.insulation.reprocessPricePerKg || ''}
-                                            onChange={e => handleInsulationUpdate('reprocessPricePerKg', parseFloat(e.target.value) || 0)}
-                                            placeholder="auto (70% fresh)"
-                                            className="border-purple-200"
-                                            disabled={!core.insulation.reprocessMaterialId}
-                                        />
-                                    </div>
 
                                     {/* Thickness */}
                                     <div>
@@ -1232,8 +1238,18 @@ const CoreComponent = ({
                                     <StatBox label="Insulated Dia" value={`${insulationCalc.insulatedDiameter} mm`} accent />
                                     <StatBox label="Fresh Weight" value={`${insulationCalc.freshWeight} kg`} />
                                     <StatBox label="Reprocess Weight" value={`${insulationCalc.reprocessWeight} kg`} />
-                                    <StatBox label="Fresh Cost" value={fmtCur(insulationCalc.freshCost)} />
-                                    <StatBox label="Reprocess Cost" value={fmtCur(insulationCalc.reprocessCost)} />
+                                    <MaterialCostDisplay
+                                        materialId={core.insulation?.freshMaterialId}
+                                        weight={core.insulation?.freshWeight}
+                                        type="fresh"
+                                        label="Fresh Cost"
+                                    />
+                                    <MaterialCostDisplay
+                                        materialId={core.insulation?.reprocessMaterialId}
+                                        weight={core.insulation?.reprocessWeight}
+                                        type="reprocess"
+                                        label="Reprocess Cost"
+                                    />
                                     <StatBox label="Insulation Total" value={fmtCur(insulationCalc.totalCost)} accent />
                                 </div>
 
