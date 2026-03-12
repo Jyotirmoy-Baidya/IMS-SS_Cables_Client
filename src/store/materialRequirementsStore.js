@@ -7,7 +7,7 @@ import api from '../api/axiosInstance';
  */
 const useMaterialRequirementsStore = create((set, get) => ({
     // Aggregated requirements by material (for MaterialRequirements component)
-    requirements: [],
+    materialsRequiredInQuotation: [],
 
     // Raw breakdown by usage
     breakdown: [],
@@ -35,12 +35,19 @@ const useMaterialRequirementsStore = create((set, get) => ({
                 quotation = quotationOrId;
             }
 
+            console.log(quotation);
             const { cores = [], sheathGroups = [] } = quotation;
 
             const breakdown = [];
 
             // Flatten all materialRequired arrays from cores using flatMap
-            const materialsRequiredInQuotation = cores.flatMap(core => core.materialRequired || [])
+            // Include core name and coreNumber in each material requirement
+            const materialsRequiredInQuotation = cores.flatMap(core =>
+                (core.materialRequired || []).map(material => ({
+                    ...material,
+                    coreName: `Core - ${core.coreNumber}`
+                }))
+            )
 
             // ═══════════════════════════════════════════════════════
             // EXTRACT MATERIAL REQUIREMENTS FROM SHEATH GROUPS
@@ -90,14 +97,10 @@ const useMaterialRequirementsStore = create((set, get) => ({
                 });
             });
 
-            const requirements = Object.values(aggregated).map(mat => ({
-                ...mat,
-                totalWeight: parseFloat(mat.totalWeight.toFixed(4))
-            }));
 
 
             set({ materialsRequiredInQuotation, breakdown });
-            return requirements;
+            return materialsRequiredInQuotation;
         } catch (error) {
             console.error('Error fetching quotation or calculating materials:', error);
             set({ requirements: [], breakdown: [], materialsRequiredInQuotation: [] });

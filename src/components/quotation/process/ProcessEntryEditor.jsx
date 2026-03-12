@@ -96,6 +96,7 @@ const ProcessEntryEditor = ({ parentId, parentType, context = {}, onSave, onCanc
                 console.log(contextValue)
                 return {
                     name: v.name,
+                    source: v.source || '', // Which context key this variable is mapped to
                     value: contextValue !== undefined ? contextValue : v.defaultValue,
                     unit: v.unit || '',
                     fromContext: contextValue !== undefined
@@ -116,6 +117,24 @@ const ProcessEntryEditor = ({ parentId, parentType, context = {}, onSave, onCanc
             prev.map(v =>
                 v.name === varName ? { ...v, value: newValue, fromContext: false } : v
             )
+        );
+    };
+
+    // Update variable source mapping (change which context variable it's linked to)
+    const updateVariableSource = (varName, newSource) => {
+        setVariables(prev =>
+            prev.map(v => {
+                if (v.name === varName) {
+                    const contextValue = context[newSource];
+                    return {
+                        ...v,
+                        source: newSource,
+                        value: contextValue !== undefined ? contextValue : v.value,
+                        fromContext: contextValue !== undefined
+                    };
+                }
+                return v;
+            })
         );
     };
 
@@ -268,26 +287,55 @@ const ProcessEntryEditor = ({ parentId, parentType, context = {}, onSave, onCanc
                         <h4 className="text-sm font-bold text-gray-700">Variables</h4>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-3">
                         {variables.map(v => (
-                            <div key={v.name} className="space-y-1">
-                                <label className="block text-xs font-medium text-gray-600">
-                                    {v.name}
-                                    {v.fromContext && (
-                                        <span className="ml-1.5 text-xs text-emerald-600">(from context)</span>
-                                    )}
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="number"
-                                        step="any"
-                                        value={v.value}
-                                        onChange={e => updateVariable(v.name, parseFloat(e.target.value) || 0)}
-                                        className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
-                                    {v.unit && (
-                                        <span className="text-xs text-gray-500 self-center">{v.unit}</span>
-                                    )}
+                            <div key={v.name} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <div className="space-y-2">
+                                    {/* Variable Name */}
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-bold text-gray-700">
+                                            {v.name}
+                                        </label>
+                                        {v.fromContext && v.source && (
+                                            <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded">
+                                                ✓ from {v.source}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Source Mapping Dropdown */}
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">
+                                            Map from context:
+                                        </label>
+                                        <select
+                                            value={v.source || ''}
+                                            onChange={e => updateVariableSource(v.name, e.target.value)}
+                                            className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                        >
+                                            <option value="">— Manual entry —</option>
+                                            {Object.keys(context).map(key => (
+                                                <option key={key} value={key}>
+                                                    {key} = {context[key]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Value Input */}
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">
+                                            Value: {v.unit && `(${v.unit})`}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            value={v.value}
+                                            onChange={e => updateVariable(v.name, parseFloat(e.target.value) || 0)}
+                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                            placeholder="Enter value manually"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -296,7 +344,7 @@ const ProcessEntryEditor = ({ parentId, parentType, context = {}, onSave, onCanc
                     {/* Calculate Button */}
                     <button
                         onClick={handleCalculate}
-                        className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 font-medium transition-all"
+                        className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-linear-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 font-medium transition-all"
                     >
                         <Calculator size={16} />
                         Calculate Outputs
