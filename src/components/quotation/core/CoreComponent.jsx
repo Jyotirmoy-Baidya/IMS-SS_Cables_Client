@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Zap, Package, Layers, ChevronDown, ChevronUp, AlertTriangle, Copy, Minimize2, Maximize2 } from 'lucide-react';
 import {
-    calculateWireDimensions,
-    calculateDrawingLength,
     calculateMaterialWeight,
-    calculateCoreDiameter,
-    calculateInsulation,
     calculateOuterArea
 } from '../../../utils/cableCalculations';
 // import ProcessSelector from '../processes/ProcessSelector'; // Replaced with ProcessEntryEditor
@@ -500,10 +496,6 @@ const CoreComponent = ({
         };
     };
 
-    // OLD FUNCTIONS REMOVED - Now using ProcessEntry API
-    // const addProcess, removeProcess, updateProcessVariable - replaced by ProcessEntryEditor
-
-
 
     const handleMaterialTypeSelect = (typeId) => {
         setIsSaved(false);
@@ -552,29 +544,6 @@ const CoreComponent = ({
 
     // Calculations - use core length if set, otherwise cable length
     const effectiveCoreLength = core.coreLength ?? cableLength;
-    const wireDimensions = calculateWireDimensions(core.conductor?.totalCoreArea || 0, core.conductor?.wireCount || 1);
-    const drawingLength = calculateDrawingLength(core.conductor?.wireCount || 1, effectiveCoreLength);
-    const materialWeight = calculateMaterialWeight(
-        core.conductor?.totalCoreArea || 0, effectiveCoreLength, core.conductor?.selectedRod?.density || 0, core.conductor?.wastagePercent || 0
-    );
-    const rodPrice = core.conductor?.selectedRod?.inventory?.avgPricePerKg
-        || core.conductor?.selectedRod?.inventory?.lastPricePerKg || 0;
-    const materialCost = materialWeight * rodPrice;
-    const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.conductor?.wireCount || 1);
-    const insulationCalc = calculateInsulation(
-        coreDiameter,
-        core.insulation?.thickness || 0,
-        effectiveCoreLength || 0,
-        'custom',
-        core.insulation?.freshPercent || 100,
-        core.insulation?.reprocessPercent || 0,
-        core.insulation?.freshPricePerKg || 0,
-        core.insulation?.reprocessPricePerKg || null,
-        core.insulation?.density || 1.4,
-        core.insulation?.reprocessDensity || null,
-        core.insulation?.wastagePercent || 0
-    );
-
 
     const selectedTypeName = metalTypes.find(t => t._id === core.conductor?.materialTypeId)?.name || null;
 
@@ -627,7 +596,6 @@ const CoreComponent = ({
                                 <span className="text-blue-300">Insulation: {fmtCur(core.materialRequired[1]?.totalCost)}</span>
                             }
                             <span className="text-green-300">Process: {fmtCur(processCost)}</span>
-                            <span className="text-white font-bold ml-2">Total: {fmtCur(materialCost + insulationCalc.totalCost + processCost)}</span>
                         </div>
                     )}
                     {/* Save button */}
@@ -815,9 +783,9 @@ const CoreComponent = ({
 
                         {/* Calculated wire dimensions */}
                         <div className="grid grid-cols-3 gap-2 mt-3">
-                            <StatBox label="Area / Wire" value={`${wireDimensions.areaPerWire} mm²`} />
-                            <StatBox label="Dia / Wire" value={`${wireDimensions.diameterPerWire} mm`} />
-                            <StatBox label="Core Diameter" value={`${fmtN(coreDiameter)} mm`} accent />
+                            <StatBox label="Area / Wire" value={`${fmtN(Math.PI * core.conductor.wireDiameter)} mm²`} />
+                            <StatBox label="Dia / Wire" value={`${core.conductor.wireDiameter} mm`} />
+                            <StatBox label="Core Diameter" value={`${core.conductor.conductorDiameter} mm`} accent />
                         </div>
                     </div>
 
@@ -845,7 +813,7 @@ const CoreComponent = ({
 
                         <div className="px-4 py-3 bg-white">
                             {/* Status messages */}
-                            {!core.materialTypeId && (
+                            {!core.conductor.materialTypeId && (
                                 <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
                                     <AlertTriangle size={13} />
                                     Select a metal material type first to pick a rod.
@@ -864,7 +832,7 @@ const CoreComponent = ({
 
                             {/* Conductor metrics */}
                             <div className="grid grid-cols-3 gap-2">
-                                <StatBox label="Drawing Length" value={`${fmtN(drawingLength, 1)} m`} />
+                                <StatBox label="Drawing Length" value={`${core.conductor.drawingLength} m`} />
                                 <StatBox label="Material Weight" value={`${fmtN(core.conductor.materialWeight)} kg`} />
 
                                 <MaterialCostDisplay
