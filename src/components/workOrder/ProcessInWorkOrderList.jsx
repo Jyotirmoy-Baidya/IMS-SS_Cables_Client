@@ -5,7 +5,7 @@ import {
     TrendingUp, Plus, ExternalLink, CheckCircle2, Clock
 } from 'lucide-react';
 import api from '../../api/axiosInstance';
-import AddInputModal from '../processTracking/AddInputModal';
+import AddInputModal from './AddInputModal';
 import AddOutputModal from '../processTracking/AddOutputModal';
 import UpdateProgressModal from '../processTracking/UpdateProgressModal';
 import SubmitReportModal from '../processTracking/SubmitReportModal';
@@ -656,7 +656,7 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
                                                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
                                                     <p className="text-xs font-semibold text-blue-700 uppercase mb-2">Recent Inputs</p>
                                                     <div className="space-y-1">
-                                                        {process.inputs.slice(-2).map((input, idx) => (
+                                                        {process.inputs.map((input, idx) => (
                                                             <div key={idx} className="text-xs text-blue-800">
                                                                 • {input.sourceType === 'raw-material' ? input.materialName : input.wipItemName}
                                                                 {' - '}
@@ -745,7 +745,7 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
             {/* Modals */}
             {showAddInput && selectedProcess && (
                 <AddInputModal
-                    tracking={selectedProcess}
+                    process={selectedProcess}
                     onClose={() => {
                         setShowAddInput(false);
                         setSelectedProcess(null);

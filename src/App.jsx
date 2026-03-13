@@ -22,6 +22,9 @@ import IntermediateProductPage from './pages/IntermediateProductPage'
 import CoreMasterPage from './pages/CoreMasterPage'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
+import EmployeeDashboardLayout from './layouts/EmployeeDashboardLayout'
+import EmployeeDashboard from './pages/EmployeeDashboard'
+import EmployeeProcessDetailPage from './pages/EmployeeProcessDetailPage'
 
 const App = () => {
   const initAuth = useAuthStore((state) => state.initAuth);
@@ -58,6 +61,14 @@ const App = () => {
           <Route path='work-order/:id' element={<WorkOrderDetailPage />} />
           <Route path='settings/locations' element={<LocationsPage />} />
         </Route>
+
+        {/* Employee Routes */}
+        <Route path="/employee" element={<EmployeeDashboardLayout />}>
+          <Route path="dashboard" element={<EmployeeDashboard />} />
+          <Route path="process/:id" element={<EmployeeProcessDetailPage />} />
+        </Route>
+
+        {/* Auth Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
       </Routes>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Package, AlertCircle } from 'lucide-react';
 import api from '../../api/axiosInstance';
 
-const AddInputModal = ({ tracking, onClose, onSuccess }) => {
+const AddInputModal = ({ process, onClose, onSuccess }) => {
     const [sourceType, setSourceType] = useState('raw-material');
     const [allocatedMaterials, setAllocatedMaterials] = useState([]);
     const [wipItems, setWIPItems] = useState([]);
@@ -17,30 +17,28 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
 
     useEffect(() => {
         fetchData();
-    }, [tracking.workOrderId]);
+    }, [process.workOrderId]);
 
     const fetchData = async () => {
         try {
             setLoading(true);
 
             // Extract workOrderId - handle both string and object cases
-            const workOrderId = typeof tracking.workOrderId === 'object'
-                ? tracking.workOrderId._id || tracking.workOrderId
-                : tracking.workOrderId;
+            const workOrderId = typeof process.workOrderId === 'object'
+                ? process.workOrderId._id || process.workOrderId
+                : process.workOrderId;
 
             console.log('Fetching for work order ID:', workOrderId);
 
             // Fetch work order to get allocated materials
             const woRes = await api.get(`/work-order/get-work-order/${workOrderId}`);
             console.log('Work Order Response:', woRes);
-            console.log('Allocated Materials:', woRes.data?.allocatedMaterials);
 
-            // Handle response structure: { success, data: workOrder }
             const workOrder = woRes.data || woRes;
             setAllocatedMaterials(workOrder.allocatedMaterials || []);
 
             // Fetch WIP inventory for this work order
-            const wipRes = await api.get(`/employee/work-order/${workOrderId}/wip`);
+            const wipRes = await api.get(`/wip-inventory?workOrderId=${workOrderId}`);
             const wipData = wipRes.data || wipRes;
             setWIPItems(Array.isArray(wipData) ? wipData : []);
         } catch (err) {
@@ -75,22 +73,22 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
             const payload = {
                 sourceType,
                 quantityUsed,
-                usedBy: null, // Can add user context here
                 notes
             };
 
             if (sourceType === 'raw-material') {
                 payload.allocatedMaterialId = selectedMaterial._id;
-                payload.materialId = selectedMaterial.materialId;
-                payload.materialName = selectedMaterial.materialName;
-                payload.lotId = selectedMaterial.materialLotId;
-                payload.lotNumber = selectedMaterial.lotNumber;
+                payload.materialId = selectedMaterial.materialId?._id || selectedMaterial.materialId;
+                payload.materialName = selectedMaterial.materialId?.name || selectedMaterial.materialName;
+                payload.lotId = selectedMaterial.materialLotId?._id || selectedMaterial.materialLotId;
+                payload.lotNumber = selectedMaterial.materialLotId?.lotNumber || selectedMaterial.lotNumber;
             } else {
                 payload.wipInventoryId = selectedWIP._id;
                 payload.wipItemName = selectedWIP.itemName;
             }
 
-            await api.post(`/process-tracking/${tracking._id}/inputs`, payload);
+            await api.post(`/process-in-work-order/${process._id}/add-input`, payload);
+            alert('Input added successfully');
             onSuccess();
         } catch (error) {
             alert('Error adding input: ' + error.message);
@@ -111,8 +109,8 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
     const handleWIPSelect = (wip) => {
         setSelectedWIP(wip);
         setQuantityUsed({
-            weight: wip.remainingQuantity?.weight || 0,
-            length: wip.remainingQuantity?.length || 0,
+            weight: wip.quantity?.weight || 0,
+            length: wip.quantity?.length || 0,
             unit: wip.quantity?.unit || 'kg'
         });
     };
@@ -123,7 +121,7 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
                 <div className="flex items-center justify-between px-6 py-4 border-b bg-blue-50">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Add Input (Consume Material)</h2>
-                        <p className="text-xs text-gray-500 mt-0.5">Process: {tracking.processName}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Process: {process.processName}</p>
                     </div>
                     <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
                         <X size={20} />
@@ -143,11 +141,10 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
                                         setSelectedMaterial(null);
                                         setSelectedWIP(null);
                                     }}
-                                    className={`px-4 py-3 border-2 rounded-lg text-sm font-semibold transition ${
-                                        sourceType === 'raw-material'
+                                    className={`px-4 py-3 border-2 rounded-lg text-sm font-semibold transition ${sourceType === 'raw-material'
                                             ? 'border-blue-500 bg-blue-50 text-blue-700'
                                             : 'border-gray-200 hover:border-gray-300'
-                                    }`}
+                                        }`}
                                 >
                                     <Package size={16} className="inline mr-2" />
                                     Raw Material (Allocated)
@@ -159,11 +156,10 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
                                         setSelectedMaterial(null);
                                         setSelectedWIP(null);
                                     }}
-                                    className={`px-4 py-3 border-2 rounded-lg text-sm font-semibold transition ${
-                                        sourceType === 'wip-inventory'
+                                    className={`px-4 py-3 border-2 rounded-lg text-sm font-semibold transition ${sourceType === 'wip-inventory'
                                             ? 'border-blue-500 bg-blue-50 text-blue-700'
                                             : 'border-gray-200 hover:border-gray-300'
-                                    }`}
+                                        }`}
                                 >
                                     <Package size={16} className="inline mr-2" />
                                     WIP Inventory
@@ -195,20 +191,23 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
                                                     <div
                                                         key={material._id}
                                                         onClick={() => handleMaterialSelect(material)}
-                                                        className={`p-3 border-2 rounded-lg cursor-pointer transition ${
-                                                            selectedMaterial?._id === material._id
+                                                        className={`p-3 border-2 rounded-lg cursor-pointer transition ${selectedMaterial?._id === material._id
                                                                 ? 'border-blue-500 bg-blue-50'
                                                                 : 'border-gray-200 hover:border-gray-300'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <div className="flex items-center justify-between">
                                                             <div>
-                                                                <p className="font-semibold text-gray-800">{material.materialName}</p>
-                                                                <p className="text-xs text-gray-500">Lot: {material.lotNumber}</p>
+                                                                <p className="font-semibold text-gray-800">
+                                                                    {material.materialId?.name || material.materialName || 'Unknown Material'}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500">
+                                                                    Lot: {material.materialLotId?.lotNumber || material.lotNumber || 'N/A'}
+                                                                </p>
                                                             </div>
                                                             <div className="text-right">
                                                                 <p className="text-sm font-bold text-blue-700">
-                                                                    {material.allocatedWeight?.toFixed(2)} kg
+                                                                    {material.allocatedWeight?.toFixed(2) || 0} kg
                                                                 </p>
                                                                 {material.isConsumed && (
                                                                     <span className="text-xs text-emerald-600">Consumed</span>
@@ -239,22 +238,21 @@ const AddInputModal = ({ tracking, onClose, onSuccess }) => {
                                                     <div
                                                         key={wip._id}
                                                         onClick={() => handleWIPSelect(wip)}
-                                                        className={`p-3 border-2 rounded-lg cursor-pointer transition ${
-                                                            selectedWIP?._id === wip._id
+                                                        className={`p-3 border-2 rounded-lg cursor-pointer transition ${selectedWIP?._id === wip._id
                                                                 ? 'border-blue-500 bg-blue-50'
                                                                 : 'border-gray-200 hover:border-gray-300'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <div className="flex items-center justify-between">
                                                             <div>
                                                                 <p className="font-semibold text-gray-800">{wip.itemName}</p>
                                                                 <p className="text-xs text-gray-500">
-                                                                    From: {wip.processName} • {wip.specifications}
+                                                                    {wip.processName} • {wip.specifications}
                                                                 </p>
                                                             </div>
                                                             <div className="text-right">
                                                                 <p className="text-sm font-bold text-green-700">
-                                                                    Available: {wip.remainingQuantity?.weight?.toFixed(2) || 0} {wip.quantity?.unit}
+                                                                    {wip.quantity?.weight?.toFixed(2) || wip.quantity?.length?.toFixed(2) || 0} {wip.quantity?.unit}
                                                                 </p>
                                                             </div>
                                                         </div>

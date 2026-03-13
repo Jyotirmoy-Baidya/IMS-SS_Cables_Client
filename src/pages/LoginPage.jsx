@@ -49,8 +49,12 @@ const LoginPage = () => {
                 // Redirect based on role
                 if (response.data.user.role === 'admin') {
                     navigate('/dashboard');
+                } else if (response.data.user.role === 'employee') {
+                    navigate('/employee/dashboard');
+                } else if (response.data.user.role === 'salesperson') {
+                    navigate('/salesperson/dashboard');
                 } else {
-                    alert('Access denied. Only admins can access the dashboard.');
+                    alert('Unknown role. Please contact administrator.');
                     navigate('/login');
                 }
             }
