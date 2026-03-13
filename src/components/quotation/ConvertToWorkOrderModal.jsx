@@ -4,14 +4,13 @@ import api from '../../api/axiosInstance';
 import useQuotationProcessStore from '../../store/quotationProcessStore';
 import useMaterialRequirementsStore from '../../store/materialRequirementsStore';
 
-const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
+const ConvertToWorkOrderModal = ({ quotationId, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(true);
     const [converting, setConverting] = useState(false);
-    const [allEmployees, setAllEmployees] = useState([]);
-    const [allProcesses, setAllProcesses] = useState([]);
     const [allLocations, setAllLocations] = useState([]);
     const [processAssignments, setProcessAssignments] = useState([]);
     const [materialRequirements, setMaterialRequirements] = useState([]);
+    const [finalQuotePrice, setFinalQuotePrice] = useState(null);
     const [notes, setNotes] = useState('');
     const { calculateAllProcessInQuotation } = useQuotationProcessStore();
     const { calculateAll } = useMaterialRequirementsStore();
@@ -21,52 +20,48 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
             try {
                 setLoading(true);
 
-                // Sync all processes from quotation (cores, sheaths, and quote-level)
-                const allProcessesCalc = await calculateAllProcessInQuotation(quotation);
-                console.log(allProcesses);
-                setAllProcesses(allProcessesCalc);
+                // Sync all processes from quotationId (cores, sheaths, and quote-level)
+                const allProcessesCalc = await calculateAllProcessInQuotation(quotationId);
 
                 // Calculate material requirements
-                const materials = await calculateAll(quotation);
+                const materials = await calculateAll(quotationId);
                 setMaterialRequirements(materials || []);
 
-                // Fetch all active employees and locations in parallel
-                const [empRes, locRes] = await Promise.all([
+                // Fetch all active employees, locations, and final quote price in parallel
+                const [empRes, locRes, quotePriceRes] = await Promise.all([
                     api.get('/user/get-all-users?role=employee&isActive=true'),
                     api.get('/location/get-all-locations?isActive=true'),
+                    api.get(`/quote-price/quotation/${quotationId}`)
                 ]);
                 const employees = empRes.data || [];
                 const locations = locRes.data || [];
-                setAllEmployees(employees);
                 setAllLocations(locations);
-                console.log("eeee", allProcessesCalc);
+
+                // Find the final quote price
+                const finalPrice = (quotePriceRes.data || []).find(qp => qp.isFinal);
+                setFinalQuotePrice(finalPrice || null);
                 // Get unique processes from the store
                 // const uniqueProcesses = getUniqueProcesses(allProcesses);
 
                 // Initialize process assignments
-                const assignments = allProcessesCalc.map(process => {
+                const assignments = allProcessesCalc.map((process, index) => {
                     // Find employees who have this process
                     const eligibleEmployees = employees.filter(emp =>
                         emp.processes?.some(p => (typeof p === 'object' ? p._id : p) === process.processId._id)
                     );
 
-
-
-                    // Get process cost from quotation
-                    const processCost = process.processCost;
-
                     // Extract output configuration
                     const expectedOutput = process?.output || { outputType: 'none' };
-                    console.log(expectedOutput, processCost);
                     return {
                         processId: process._id,
-                        processName: process.name,
+                        processName: process.processName,
                         category: process.category,
                         assignedEmployeeId: eligibleEmployees[0]?._id || '',
                         locationId: locations[0]?._id || '',
                         locationName: locations[0]?.name || '',
+                        sequence: index, // Initialize with current index
                         addReportAfter: false,
-                        cost: processCost,
+                        cost: process.processCost || 0,
                         expectedOutput,
                         eligibleEmployees,
                     };
@@ -83,37 +78,20 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
 
         fetchEmployeesAndInitialize();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [quotation]);
+    }, [quotationId]);
 
 
-    const evalFormula = (formula, variables) => {
-        try {
-            const scope = {};
-            (variables || []).forEach(v => { scope[v.name] = parseFloat(v.value) || 0; });
-            if (!formula || !formula.trim()) return 0;
-            const fn = new Function(...Object.keys(scope), `return (${formula})`);
-            const result = fn(...Object.values(scope));
-            return typeof result === 'number' && isFinite(result) ? result : 0;
-        } catch { return 0; }
-    };
-
-    const interpolateTemplate = (template, variables) => {
-        if (!template) return '';
-        try {
-            const scope = {};
-            (variables || []).forEach(v => { scope[v.name] = parseFloat(v.value) || 0; });
-            return template.replace(/\$\{(\w+)\}/g, (match, varName) => {
-                return scope[varName] !== undefined ? scope[varName] : match;
-            });
-        } catch {
-            return template;
-        }
-    };
 
 
     const handleAssignmentChange = (index, field, value) => {
         const updated = [...processAssignments];
         updated[index][field] = value;
+
+        // If sequence changed, re-sort the array
+        if (field === 'sequence') {
+            updated.sort((a, b) => a.sequence - b.sequence);
+        }
+
         setProcessAssignments(updated);
     };
 
@@ -127,45 +105,33 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
             }
 
             setConverting(true);
-
+            console.log(quotationId)
             // Prepare payload
             const payload = {
-                quoteId: quotation._id,
-                processAssignments: processAssignments.map(a => {
-                    return {
-                        processId: a.processId,
-                        processName: a.processName,
-                        processCategory: a.category || '',
-                        assignedEmployeeId: a.assignedEmployeeId,
-                        locationId: a.locationId,
-                        locationName: a.locationName,
-                        addReportAfter: a.addReportAfter,
-
-                        // Cost information
-                        processCost: a.cost || 0,
-
-
-                        // Expected output
-                        expectedOutput: a.expectedOutput
-                    };
-                }),
-                materialRequirements: materialRequirements.map(req => ({
-                    materialId: req.materialId,
-                    materialName: req.materialName,
-                    category: req.category,
-                    type: req.type,
-                    totalWeight: req.totalWeight,
-                    pricePerKg: req.pricePerKg || 0,
-                    totalCost: req.totalCost || 0,
-                    usedIn: req.usedIn
+                quoteId: quotationId,
+                processAssignments: processAssignments.map(a => ({
+                    processId: a.processId,
+                    processName: a.processName,
+                    category: a.category,
+                    assignedEmployeeId: a.assignedEmployeeId,
+                    locationId: a.locationId,
+                    locationName: a.locationName,
+                    sequence: a.sequence,
+                    addReportAfter: a.addReportAfter,
+                    processCost: a.cost || 0,
+                    expectedOutput: a.expectedOutput
                 })),
+                materialRequirements: materialRequirements,
                 processCosts: processAssignments.map(a => ({
                     processId: a.processId,
                     processName: a.processName,
                     cost: a.cost || 0
                 })),
+                finalQuotePriceId: finalQuotePrice?._id || null,
                 notes,
             };
+
+            console.log("word order payload", payload);
 
             await api.post('/work-order/create-work-order', payload);
             onSuccess?.();
@@ -196,7 +162,7 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Convert to Work Order</h2>
                         <p className="text-xs text-gray-500 mt-0.5">
-                            Quotation: <span className="font-semibold text-gray-700">{quotation.quoteNumber}</span>
+                            Quotation: <span className="font-semibold text-gray-700">{quotationId.quoteNumber}</span>
                         </p>
                     </div>
                     <button
@@ -222,7 +188,7 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                         {processAssignments.length === 0 ? (
                             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
                                 <p className="text-sm text-amber-700">
-                                    No processes found in this quotation.
+                                    No processes found in this quotationId.
                                 </p>
                             </div>
                         ) : (
@@ -233,6 +199,20 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                                         className="bg-gray-50 border border-gray-200 rounded-lg p-4"
                                     >
                                         <div className="flex items-start gap-4">
+                                            {/* Sequence Number Input */}
+                                            <div className="flex flex-col items-center gap-1 pt-1">
+                                                <label className="text-xs text-gray-500 font-medium">Seq</label>
+                                                <input
+                                                    type="number"
+                                                    value={assignment.sequence}
+                                                    onChange={e =>
+                                                        handleAssignmentChange(idx, 'sequence', parseInt(e.target.value) || 0)
+                                                    }
+                                                    className="w-16 px-2 py-1 text-sm text-center border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                                    min="0"
+                                                />
+                                            </div>
+
                                             {/* Process Info */}
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2 mb-2">
@@ -247,7 +227,25 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                                                             {assignment.context.label}
                                                         </span>
                                                     )}
+                                                    <span className="ml-auto text-xs font-semibold text-emerald-600">
+                                                        ₹{assignment.cost?.toFixed(2) || '0.00'}
+                                                    </span>
                                                 </div>
+
+                                                {/* Expected Output Info */}
+                                                {assignment.expectedOutput && assignment.expectedOutput.outputType !== 'none' && (
+                                                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-2">
+                                                        <p className="text-xs font-medium text-blue-700 mb-1">Expected Output:</p>
+                                                        <div className="text-xs text-blue-600 space-y-0.5">
+                                                            <p><span className="font-semibold">Item:</span> {assignment.expectedOutput.calculatedItemName || 'N/A'}</p>
+                                                            <p><span className="font-semibold">Quantity:</span> {assignment.expectedOutput.calculatedQuantity || 0} {assignment.expectedOutput.unit || 'm'}</p>
+                                                            {assignment.expectedOutput.calculatedSpecification && (
+                                                                <p><span className="font-semibold">Spec:</span> {assignment.expectedOutput.calculatedSpecification}</p>
+                                                            )}
+                                                            <p><span className="font-semibold">Type:</span> <span className="capitalize">{assignment.expectedOutput.outputType}</span></p>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {/* Employee Dropdown */}
                                                 {assignment.eligibleEmployees.length === 0 ? (
@@ -331,6 +329,44 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                             </div>
                         )}
                     </div>
+
+                    {/* Final Quote Price Details */}
+                    {finalQuotePrice && (
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <FileText size={14} className="text-gray-500" />
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                    Final Quote Price (Version {finalQuotePrice.version})
+                                </label>
+                            </div>
+                            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4">
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <p className="text-xs text-gray-500 mb-1">Base Amount</p>
+                                        <p className="font-semibold text-gray-800">₹{finalQuotePrice.quoteBaseAmount?.toFixed(2) || '0.00'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 mb-1">After Profit</p>
+                                        <p className="font-semibold text-gray-800">₹{finalQuotePrice.quoteAfterAddingProfit?.toFixed(2) || '0.00'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 mb-1">GST ({finalQuotePrice.gstPercentage || 0}%)</p>
+                                        <p className="font-semibold text-gray-800">₹{((finalQuotePrice.quotePriceAfterTax - finalQuotePrice.quoteAfterAddingProfit) || 0).toFixed(2)}</p>
+                                    </div>
+                                    <div className="bg-emerald-100 rounded-lg p-2">
+                                        <p className="text-xs text-emerald-700 mb-1">Final Price (After Tax)</p>
+                                        <p className="text-lg font-bold text-emerald-800">₹{finalQuotePrice.quotePriceAfterTax?.toFixed(2) || '0.00'}</p>
+                                    </div>
+                                </div>
+                                {finalQuotePrice.notes && (
+                                    <div className="mt-3 pt-3 border-t border-emerald-200">
+                                        <p className="text-xs text-gray-500 mb-1">Notes:</p>
+                                        <p className="text-xs text-gray-700">{finalQuotePrice.notes}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Notes */}
                     <div>

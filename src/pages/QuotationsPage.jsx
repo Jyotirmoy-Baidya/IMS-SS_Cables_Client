@@ -625,7 +625,7 @@ const QuotationsPage = () => {
             {/* ── Convert to Work Order Modal ── */}
             {convertModal && (
                 <ConvertToWorkOrderModal
-                    quotation={convertModal}
+                    quotationId={convertModal}
                     onClose={() => setConvertModal(null)}
                     onSuccess={() => {
                         setConvertModal(null);
