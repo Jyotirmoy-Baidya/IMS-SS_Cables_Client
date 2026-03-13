@@ -100,7 +100,7 @@ const SheathMaterialSelector = ({ sheath, onUpdate }) => {
         }
         const type = sheathTypes.find(t => t._id === typeId);
         if (!type) return;
-
+        console.log(type);
         onUpdate({
             freshMaterialTypeId: typeId,
             freshMaterialId: null,

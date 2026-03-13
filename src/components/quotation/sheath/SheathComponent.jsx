@@ -250,7 +250,6 @@ const SheathComponent = ({
                 totalCost: 0
             });
         }
-
         // Add reprocess sheath material
         if (sheathData.reprocessSheathWeight > 0 && sheathData.reprocessMaterialId) {
             materialRequired.push({
@@ -294,6 +293,8 @@ const SheathComponent = ({
                         req.materialName = pricing.materialName;
                     }
                 });
+
+                console.log("material testing", materialRequired);
             } catch (error) {
                 console.error('Failed to fetch material pricing:', error);
             }
@@ -326,6 +327,8 @@ const SheathComponent = ({
                     totalMaterialCost: parseFloat(totalMaterialCost.toFixed(2))
                 }
             };
+
+            console.log(sheath);
 
             let response;
             if (sheath._id) {

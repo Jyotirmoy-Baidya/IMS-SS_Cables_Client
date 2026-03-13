@@ -50,47 +50,23 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
                         emp.processes?.some(p => (typeof p === 'object' ? p._id : p) === process.processId._id)
                     );
 
-                    // Get full process data from allProcesses - match by processId AND context
-                    const processData = allProcesses.find(p => {
-                        if (p.processId !== process._id) return false;
 
-                        // If process has context, match it exactly
-                        if (process.context && p.context) {
-                            return p.context.type === process.context.type &&
-                                (p.context.coreIndex === process.context.coreIndex ||
-                                    p.context.sheathIndex === process.context.sheathIndex);
-                        }
-
-                        // For quote-level processes without context
-                        return !process.context && !p.context;
-                    });
-
-                    console.log('Process assignment:', {
-                        processName: process.name,
-                        context: process.context,
-                        foundData: !!processData,
-                        output: processData?.output,
-                        variables: processData?.variables
-                    });
 
                     // Get process cost from quotation
-                    const processCost = getProcessCost(process, quotation);
+                    const processCost = process.processCost;
 
                     // Extract output configuration
-                    const expectedOutput = processData?.output || { outputType: 'none' };
-
+                    const expectedOutput = process?.output || { outputType: 'none' };
+                    console.log(expectedOutput, processCost);
                     return {
                         processId: process._id,
                         processName: process.name,
                         category: process.category,
-                        context: process.context,
                         assignedEmployeeId: eligibleEmployees[0]?._id || '',
                         locationId: locations[0]?._id || '',
                         locationName: locations[0]?.name || '',
                         addReportAfter: false,
                         cost: processCost,
-                        costFormula: processData?.formula || '',
-                        variables: processData?.variables || [],
                         expectedOutput,
                         eligibleEmployees,
                     };
@@ -109,31 +85,6 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [quotation]);
 
-    const getUniqueProcesses = (processes) => {
-        // Keep processes with unique processId + context combination
-        // This is important because the same process can be used multiple times
-        // with different variables (e.g., for different cores)
-        const processMap = new Map();
-
-        processes.forEach(proc => {
-            if (proc.processId && proc.processName) {
-                // Create unique key combining processId and context
-                const contextKey = proc.context ?
-                    `${proc.processId}-${proc.context.type}-${proc.context.coreIndex || proc.context.sheathIndex || 0}` :
-                    proc.processId;
-
-                processMap.set(contextKey, {
-                    _id: proc.processId,
-                    name: proc.processName,
-                    category: proc.category,
-                    context: proc.context,
-                    uniqueKey: contextKey // Store for later matching
-                });
-            }
-        });
-
-        return Array.from(processMap.values());
-    };
 
     const evalFormula = (formula, variables) => {
         try {
@@ -159,26 +110,6 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
         }
     };
 
-    const getProcessCost = (process, quotation) => {
-        // Find process in allProcesses with matching processId and context
-        const processData = allProcesses.find(p => {
-            if (p.processId !== process._id) return false;
-
-            // If process has context, match it exactly
-            if (process.context && p.context) {
-                return p.context.type === process.context.type &&
-                    (p.context.coreIndex === process.context.coreIndex ||
-                        p.context.sheathIndex === process.context.sheathIndex);
-            }
-
-            // For quote-level processes without context
-            return !process.context && !p.context;
-        });
-
-        if (!processData || !processData.formula) return 0;
-
-        return evalFormula(processData.formula, processData.variables || []);
-    };
 
     const handleAssignmentChange = (index, field, value) => {
         const updated = [...processAssignments];
@@ -201,36 +132,6 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
             const payload = {
                 quoteId: quotation._id,
                 processAssignments: processAssignments.map(a => {
-                    const expectedOutput = a.expectedOutput || { outputType: 'none' };
-
-                    const calculatedExpectedOutput = {
-                        outputType: expectedOutput.outputType || 'none',
-                        expectedQuantity: expectedOutput.quantityFormula
-                            ? evalFormula(expectedOutput.quantityFormula, a.variables || [])
-                            : 0,
-                        expectedItemName: expectedOutput.itemNameTemplate
-                            ? interpolateTemplate(expectedOutput.itemNameTemplate, a.variables || [])
-                            : '',
-                        expectedSpecification: expectedOutput.specificationTemplate
-                            ? interpolateTemplate(expectedOutput.specificationTemplate, a.variables || [])
-                            : '',
-                        unit: expectedOutput.unit || 'm',
-                        quantityFormula: expectedOutput.quantityFormula || '',
-                        itemNameTemplate: expectedOutput.itemNameTemplate || '',
-                        specificationTemplate: expectedOutput.specificationTemplate || ''
-                    };
-
-                    console.log('Expected output calculation:', {
-                        processName: a.processName,
-                        context: a.context,
-                        outputType: expectedOutput.outputType,
-                        quantityFormula: expectedOutput.quantityFormula,
-                        variables: a.variables,
-                        calculatedQuantity: calculatedExpectedOutput.expectedQuantity,
-                        calculatedItemName: calculatedExpectedOutput.expectedItemName,
-                        calculatedSpecification: calculatedExpectedOutput.expectedSpecification
-                    });
-
                     return {
                         processId: a.processId,
                         processName: a.processName,
@@ -242,19 +143,10 @@ const ConvertToWorkOrderModal = ({ quotation, onClose, onSuccess }) => {
 
                         // Cost information
                         processCost: a.cost || 0,
-                        costFormula: a.costFormula || '',
 
-                        // Variables snapshot
-                        variables: (a.variables || []).map(v => ({
-                            name: v.name,
-                            label: v.label,
-                            value: parseFloat(v.value) || 0,
-                            unit: v.unit || '',
-                            source: v.source || 'manual'
-                        })),
 
                         // Expected output
-                        expectedOutput: calculatedExpectedOutput
+                        expectedOutput: a.expectedOutput
                     };
                 }),
                 materialRequirements: materialRequirements.map(req => ({

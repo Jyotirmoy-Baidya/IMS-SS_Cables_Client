@@ -44,17 +44,32 @@ const useMaterialRequirementsStore = create((set, get) => ({
 
             // Flatten all materialRequired arrays from cores using flatMap
             // Include core name and coreNumber in each material requirement
-            const materialsRequiredInQuotation = cores.flatMap(core => {
+            const coresMaterialsRequired = cores.flatMap(core => {
                 return (core.materialRequired || []).map(material => ({
                     ...material,
                     usedIn: `Core - ${core.coreNumber}`
                 }))
-            })
+            });
+
+            // Flatten all materialRequired arrays from sheaths using flatMap
+            // Include sheath name and sheathNumber in each material requirement
+            const sheathsMaterialsRequired = sheathGroups.flatMap(sheathGroup => {
+                return (sheathGroup.materialRequired || []).map(material => ({
+                    ...material,
+                    usedIn: `Sheath - ${sheathGroup.sheathNumber || sheathGroup.name || 'Unnamed'}`
+                }))
+            });
+
+            // Combine both cores and sheaths materials
+            const materialsRequiredInQuotation = [
+                ...coresMaterialsRequired,
+                ...sheathsMaterialsRequired
+            ];
 
             console.log(materialsRequiredInQuotation);
 
             // ═══════════════════════════════════════════════════════
-            // EXTRACT MATERIAL REQUIREMENTS FROM SHEATH GROUPS
+            // EXTRACT MATERIAL REQUIREMENTS FROM SHEATH GROUPS FOR BREAKDOWN
             // ═══════════════════════════════════════════════════════
             sheathGroups.forEach((sheathGroup, sheathIndex) => {
                 if (sheathGroup.materialRequired && Array.isArray(sheathGroup.materialRequired)) {
