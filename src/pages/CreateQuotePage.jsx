@@ -4,15 +4,19 @@ import { Plus, Save, ArrowLeft, Zap, Layers, Ruler, Eye, EyeOff } from 'lucide-r
 import CoreComponent from '../components/quotation/core/CoreComponent';
 import SheathComponent from '../components/quotation/sheath/SheathComponent';
 import QuotationSummary from '../components/quotation/summary/QuotationSummary';
-import QuoteProcessSection from '../components/quotation/processes/QuoteProcessSection';
+import MaterialSummary from '../components/quotation/summary/MaterialSummary';
+import QuoteLevelProcesses from '../components/quotation/processes/QuoteLevelProcesses';
+import ManufacturingProcessSummary from '../components/quotation/summary/ManufacturingProcessSummary';
 import {
     calculateWireDimensions,
     calculateDrawingLength,
-    calculateMaterialWeight,
-    calculateCoreDiameter,
-    calculateInsulation
+    calculateMaterialWeight
 } from '../utils/cableCalculations';
 import api from '../api/axiosInstance';
+import useMaterialRequirementsStore from '../store/materialRequirementsStore';
+import useQuotationStore from '../store/quotationStore';
+import CustomerSelector from '../components/quotation/basic/CustomerSelector';
+import useQuotationProcessStore from '../store/quotationProcessStore';
 
 const evalFormula = (formula, variables) => {
     try {
@@ -30,190 +34,117 @@ const CreateQuotePage = () => {
     const { id: quoteId } = useParams();
     const navigate = useNavigate();
 
+
     // Shared cable length for all cores
     const [cableLength, setCableLength] = useState(100);
 
-    // DB raw materials data
-    const [metalTypes, setMetalTypes] = useState([]);
-    const [insulationTypes, setInsulationTypes] = useState([]);
-    const [metalRawMaterials, setMetalRawMaterials] = useState([]);
-    const [insulationRawMaterials, setInsulationRawMaterials] = useState([]);
     const [processMasterList, setProcessMasterList] = useState([]);
 
     // Processes added to this quotation
     const [quoteProcesses, setQuoteProcesses] = useState([]);
 
     // Customer selection
-    const [customers, setCustomers] = useState([]);
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
 
-    // Profit margin
-    const [profitMarginPercent, setProfitMarginPercent] = useState(0);
 
     // Save state
     const [saving, setSaving] = useState(false);
-    const [quoteNumber, setQuoteNumber] = useState('');
+
+    const {
+        quotation,
+        loading: quotationLoading,
+        error: quotationError,
+        fetchQuotationById,
+        addCore: addCoreToQuote,
+        removeCore: removeCoreFromQuote,
+        addSheath: addSheathToQuote,
+        removeSheath: removeSheathFromQuote
+    } = useQuotationStore();
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const requests = [
-                    api.get('/material-type/get-all-material-types'),
-                    api.get('/raw-material/get-all-materials?category=metal'),
-                    api.get('/raw-material/get-all-materials'),
-                    api.get('/process/get-all-processes?isActive=true'),
-                    api.get('/customer/get-all-customer'),
-                ];
-                if (quoteId) requests.push(api.get(`/quotation/get-one-quotation/${quoteId}`));
-
-                const results = await Promise.all(requests);
-                const [typesRes, metalMatRes, insulMatRes, processRes, customerRes, quoteRes] = results;
-
-                const allTypes = typesRes.data || [];
-                setMetalTypes(allTypes.filter(t => t.category === 'metal'));
-                setInsulationTypes(allTypes.filter(t => t.category === 'insulation' || t.category === 'plastic'));
-                setMetalRawMaterials(metalMatRes.data || []);
-                const allMats = insulMatRes.data || [];
-                setInsulationRawMaterials(allMats.filter(m => m.category === 'insulation' || m.category === 'plastic'));
-                setProcessMasterList(processRes.data || []);
-                setCustomers(customerRes.data || []);
-
-                // Load existing quote for editing
-                if (quoteRes) {
-                    const q = quoteRes.data;
-                    setQuoteNumber(q.quoteNumber || '');
-                    setCableLength(q.cableLength || 100);
-                    if (q.cores?.length) setCores(q.cores);
-                    if (q.sheathGroups?.length) setSheathGroups(q.sheathGroups);
-                    if (q.quoteProcesses?.length) setQuoteProcesses(q.quoteProcesses);
-                    setSelectedCustomerId(q.customerId?._id || q.customerId || '');
-                    setProfitMarginPercent(q.profitMarginPercent || 0);
-                }
-            } catch (err) {
-                console.error('Failed to load data for quotation:', err);
-            }
-        };
-        fetchData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        fetchQuotationById(quoteId);
     }, [quoteId]);
-
-    const [cores, setCores] = useState([{
-        id: 1,
-        materialTypeId: null,
-        materialDensity: 8.96,
-        totalCoreArea: 8,
-        wireCount: 16,
-        wastagePercent: 5,
-        selectedRod: null,
-        hasAnnealing: false,
-        insulation: {
-            materialTypeId: null,
-            materialTypeName: '',
-            density: 1.4,
-            thickness: 0.5,
-            freshPercent: 70,
-            reprocessPercent: 30,
-            freshPricePerKg: 0,
-            reprocessMaterialTypeId: null,   // reprocess portion can be a different material
-            reprocessMaterialTypeName: '',
-            reprocessDensity: null,          // null = use same density as fresh
-            reprocessPricePerKg: 0
-        }
-    }]);
-
-    const [sheathGroups, setSheathGroups] = useState([{
-        id: 1,
-        coreIds: [],
-        sheathIds: [],
-        material: '',
-        materialTypeId: null,
-        density: 1.4,
-        thickness: 1.0,
-        freshPercent: 60,
-        reprocessPercent: 40,
-        freshPricePerKg: 0,
-        reprocessMaterialTypeId: null,
-        reprocessMaterialTypeName: '',
-        reprocessDensity: null,
-        reprocessPricePerKg: 0
-    }]);
 
 
     // Core management
-    const addCore = () => {
-        const newId = Math.max(...cores.map(c => c.id), 0) + 1;
-        setCores([...cores, {
-            id: newId,
-            materialTypeId: null,
-            materialDensity: 8.96,
-            totalCoreArea: 8,
-            wireCount: 16,
-            wastagePercent: 5,
-            selectedRod: null,
-            hasAnnealing: false,
-            insulation: {
-                materialTypeId: null,
-                materialTypeName: '',
-                density: 1.4,
-                thickness: 0.5,
-                freshPercent: 70,
-                reprocessPercent: 30,
-                freshPricePerKg: 0,
-                reprocessMaterialTypeId: null,
-                reprocessMaterialTypeName: '',
-                reprocessDensity: null,
-                reprocessPricePerKg: 0
-            }
-        }]);
-    };
+    const addCore = async () => {
+        if (!quoteId) {
+            alert('No quotation ID found. Please refresh the page.');
+            return;
+        }
 
-    const updateCore = (id, field, value) => {
-        setCores(prev => prev.map(core => {
-            if (core.id !== id) return core;
-            if (field === 'materialTypeId' && value !== core.materialTypeId) {
-                return { ...core, [field]: value, selectedRod: null };
-            }
-            return { ...core, [field]: value };
-        }));
+        try {
+            // Create empty core in backend
+            const response = await api.post(`/quotation/${quoteId}/cores`, {
+                coreLength: cableLength
+            });
+
+            // Add returned core to state (with all backend defaults)
+            const newCore = {
+                ...response.data,
+                id: response.data._id // Frontend uses 'id', backend uses '_id'
+            };
+            addCoreToQuote(newCore)
+        } catch (error) {
+            console.error('Failed to create core:', error);
+            alert('Failed to create core: ' + (error.message || 'Unknown error'));
+        }
     };
 
     const deleteCore = (id) => {
-        setCores(cores.filter(core => core.id !== id));
-        setSheathGroups(sheathGroups.map(sg => ({
-            ...sg,
-            coreIds: sg.coreIds.filter(cid => cid !== id)
-        })));
+        // Remove core from store - CoreComponent handles backend deletion
+        removeCoreFromQuote(id);
+    };
+
+    const duplicateCore = async (core) => {
+        if (!core) return;
+        try {
+            // Create empty core in backend
+            const response = await api.post(`/quotation/${quoteId}/cores`, {
+                ...core
+            });
+            console.log(response)
+
+            // Add returned core to state (with all backend defaults)
+            const newCore = {
+                ...response.data,
+                id: response.data._id // Frontend uses 'id', backend uses '_id'
+            };
+            addCoreToQuote(newCore)
+        } catch (error) {
+            console.error('Failed to create core:', error);
+            alert('Failed to create core: ' + (error.message || 'Unknown error'));
+        }
     };
 
     // Sheath management
-    const addSheathGroup = () => {
-        const newId = Math.max(...sheathGroups.map(sg => sg.id), 0) + 1;
-        setSheathGroups([...sheathGroups, {
-            id: newId,
-            coreIds: [],
-            sheathIds: [],
-            material: '',
-            materialTypeId: null,
-            density: 1.4,
-            thickness: 1.0,
-            freshPercent: 60,
-            reprocessPercent: 40,
-            freshPricePerKg: 0,
-            reprocessMaterialTypeId: null,
-            reprocessMaterialTypeName: '',
-            reprocessDensity: null,
-            reprocessPricePerKg: 0
-        }]);
-    };
+    const addSheathGroup = async () => {
+        if (!quoteId) {
+            alert('No quotation ID found. Please refresh the page.');
+            return;
+        }
 
-    const updateSheathGroup = (id, field, value) => {
-        setSheathGroups(prev => prev.map(sg =>
-            sg.id === id ? { ...sg, [field]: value } : sg
-        ));
+        try {
+            // Create empty sheath in backend
+            const response = await api.post(`/quotation/${quoteId}/sheaths`, {
+                sheathLength: cableLength
+            });
+
+            // Add returned sheath to store
+            const newSheath = {
+                ...response.data,
+                id: response.data._id
+            };
+            addSheathToQuote(newSheath);
+        } catch (error) {
+            console.error('Failed to create sheath:', error);
+            alert('Failed to create sheath: ' + (error.message || 'Unknown error'));
+        }
     };
 
     const deleteSheathGroup = (id) => {
-        setSheathGroups(sheathGroups.filter(sg => sg.id !== id));
+        // Remove sheath from store - SheathComponent handles backend deletion
+        removeSheathFromQuote(id);
     };
 
     // Process management
@@ -235,8 +166,10 @@ const CreateQuotePage = () => {
         }));
     };
 
+
     // Quote context — auto-bound variable values from the current quote state
     const quoteContext = useMemo(() => {
+        const cores = quotation?.cores || [];
         const totalWireCount = cores.reduce((sum, c) => sum + (c.wireCount || 0), 0);
         const totalDrawingLength = cores.reduce((sum, c) =>
             sum + calculateDrawingLength(c.wireCount, cableLength), 0);
@@ -253,427 +186,38 @@ const CreateQuotePage = () => {
             totalMaterialWeight,
             totalCoreArea
         };
-    }, [cores, cableLength]);
+    }, [quotation?.cores, cableLength]);
 
-    // Helper to get insulated diameter and area for a core
-    const getCoreOuterDimensions = (coreId) => {
-        const core = cores.find(c => c.id === coreId);
-        if (!core) return { diameter: 0, area: 0 };
 
-        const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-        const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
-        const insulationCalc = calculateInsulation(
-            coreDiameter,
-            core.insulation.thickness,
-            cableLength,
-            'custom',
-            core.insulation.freshPercent,
-            core.insulation.reprocessPercent,
-            0, // price not needed for dimension calc
-            null,
-            core.insulation.density || 1.4
-        );
+    // Use material requirements store for all calculations
+    const { totalMaterialCost } = useMaterialRequirementsStore();
+    const { totalProcessCost } = useQuotationProcessStore();
 
-        const outerArea = (Math.PI * insulationCalc.insulatedDiameter * insulationCalc.insulatedDiameter) / 4;
 
-        return {
-            diameter: insulationCalc.insulatedDiameter,
-            area: outerArea
-        };
-    };
-
-    // Helper to get sheath outer dimensions
-    const getSheathOuterDimensions = (sheathId) => {
-        const sheath = sheathGroups.find(sg => sg.id === sheathId);
-        if (!sheath) return { diameter: 0, area: 0 };
-
-        const sheathCalc = calculateSheathForGroup(sheath);
-        if (!sheathCalc) return { diameter: 0, area: 0 };
-
-        const outerArea = (Math.PI * sheathCalc.sheathOuterDiameter * sheathCalc.sheathOuterDiameter) / 4;
-
-        return {
-            diameter: sheathCalc.sheathOuterDiameter,
-            area: outerArea
-        };
-    };
-
-    // Helper to check which cores are available (not used in any sheath)
-    const getAvailableCores = (excludeSheathId = null) => {
-        const usedCoreIds = new Set();
-        sheathGroups.forEach(sg => {
-            if (sg.id !== excludeSheathId) {
-                (sg.coreIds || []).forEach(cid => usedCoreIds.add(cid));
-            }
-        });
-        return cores.filter(c => !usedCoreIds.has(c.id));
-    };
-
-    // Helper to check which sheaths are available (not used in any other sheath, and not self)
-    const getAvailableSheaths = (excludeSheathId) => {
-        const usedSheathIds = new Set();
-        sheathGroups.forEach(sg => {
-            if (sg.id !== excludeSheathId) {
-                (sg.sheathIds || []).forEach(sid => usedSheathIds.add(sid));
-            }
-        });
-        return sheathGroups.filter(sg =>
-            sg.id !== excludeSheathId &&
-            !usedSheathIds.has(sg.id) &&
-            ((sg.coreIds && sg.coreIds.length > 0) || (sg.sheathIds && sg.sheathIds.length > 0))
-        );
-    };
-
-    // Calculate sheath for a specific group
-    const calculateSheathForGroup = (sheathGroup) => {
-        const innerDiameters = [];
-        const innerAreas = [];
-        let avgLength = 0;
-        let lengthCount = 0;
-
-        // Get dimensions from cores
-        (sheathGroup.coreIds || []).forEach(coreId => {
-            const core = cores.find(c => c.id === coreId);
-            if (core) {
-                const dimensions = getCoreOuterDimensions(coreId);
-                innerDiameters.push(dimensions.diameter);
-                innerAreas.push(dimensions.area);
-                avgLength += cableLength;
-                lengthCount++;
-            }
-        });
-
-        // Get dimensions from nested sheaths
-        (sheathGroup.sheathIds || []).forEach(sheathId => {
-            const dimensions = getSheathOuterDimensions(sheathId);
-            if (dimensions.diameter > 0) {
-                innerDiameters.push(dimensions.diameter);
-                innerAreas.push(dimensions.area);
-                // Use average length from nested sheath's contents
-                const nestedSheath = sheathGroups.find(sg => sg.id === sheathId);
-                if (nestedSheath) {
-                    const nestedCalc = calculateSheathForGroup(nestedSheath);
-                    if (nestedCalc) {
-                        avgLength += nestedCalc.avgLength;
-                        lengthCount++;
-                    }
-                }
-            }
-        });
-
-        if (innerDiameters.length === 0) return null;
-
-        avgLength = avgLength / lengthCount;
-
-        // Calculate total inner area
-        const totalInnerArea = innerAreas.reduce((sum, area) => sum + area, 0);
-
-        // Calculate bundle diameter from total area
-        const bundleDiameter = Math.sqrt((totalInnerArea * 4) / Math.PI);
-        const sheathOuterDiameter = bundleDiameter + (2 * sheathGroup.thickness);
-
-        // Volume calculation
-        const outerRadius = sheathOuterDiameter / 2;
-        const innerRadius = bundleDiameter / 2;
-        const volumeMm3 = Math.PI * (outerRadius ** 2 - innerRadius ** 2) * avgLength * 1000;
-        const volumeCm3 = volumeMm3 / 1000;
-
-        const freshDens = sheathGroup.density || 1.4;
-        const reprocessDens = sheathGroup.reprocessDensity || freshDens;
-
-        const freshWeight = (volumeCm3 * (sheathGroup.freshPercent / 100) * freshDens) / 1000;
-        const reprocessWeight = (volumeCm3 * (sheathGroup.reprocessPercent / 100) * reprocessDens) / 1000;
-        const totalWeight = freshWeight + reprocessWeight;
-
-        const freshPrice = sheathGroup.freshPricePerKg || 0;
-        const reprocessPrice = (sheathGroup.reprocessPricePerKg > 0)
-            ? sheathGroup.reprocessPricePerKg
-            : freshPrice * 0.7;
-        const freshCost = freshWeight * freshPrice;
-        const reprocessCost = reprocessWeight * reprocessPrice;
-
-        return {
-            bundleDiameter: parseFloat(bundleDiameter.toFixed(3)),
-            sheathOuterDiameter: parseFloat(sheathOuterDiameter.toFixed(3)),
-            totalInnerArea: parseFloat(totalInnerArea.toFixed(3)),
-            totalWeight: parseFloat(totalWeight.toFixed(4)),
-            freshWeight: parseFloat(freshWeight.toFixed(4)),
-            reprocessWeight: parseFloat(reprocessWeight.toFixed(4)),
-            freshCost: parseFloat(freshCost.toFixed(2)),
-            reprocessCost: parseFloat(reprocessCost.toFixed(2)),
-            totalCost: parseFloat((freshCost + reprocessCost).toFixed(2)),
-            avgLength
-        };
-    };
-
-    // Calculate all totals — returns per-entity details for the summary
-    const calculateTotals = () => {
-        let totalCost = 0;
-        const details = []; // { type, coreIndex?, sheathIndex?, name, weight?, freshWeight?, reprocessWeight?, reprocessName?, cost }
-
-        cores.forEach((core, idx) => {
-            const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-            const drawingLength = calculateDrawingLength(core.wireCount, cableLength);
-            const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
-            const materialWeight = calculateMaterialWeight(
-                wireDimensions.areaPerWire,
-                drawingLength,
-                core.materialDensity || 8.96,
-                core.wastagePercent
-            );
-
-            if (core.selectedRod) {
-                const rodPrice = core.selectedRod?.inventory?.avgPricePerKg || 0;
-                const conductorCost = materialWeight * rodPrice;
-                totalCost += conductorCost;
-                // Use actual material name (rod name), not material type name
-                const metalName = core.selectedRod.name || metalTypes.find(t => t._id === core.materialTypeId)?.name || 'Metal';
-                details.push({
-                    type: 'conductor',
-                    coreIndex: idx,
-                    coreId: core.id,
-                    name: metalName,
-                    weight: parseFloat(materialWeight.toFixed(4)),
-                    pricePerKg: rodPrice,
-                    cost: parseFloat(conductorCost.toFixed(2))
-                });
-            }
-
-            const insulationCalc = calculateInsulation(
-                coreDiameter,
-                core.insulation.thickness,
-                cableLength,
-                'custom',
-                core.insulation.freshPercent,
-                core.insulation.reprocessPercent,
-                core.insulation.freshPricePerKg || 0,
-                core.insulation.reprocessPricePerKg || null,
-                core.insulation.density || 1.4,
-                core.insulation.reprocessDensity || null
-            );
-            totalCost += insulationCalc.totalCost;
-
-            // Use actual material name from the material object, fallback to type name
-            const insulName = core.insulation.material?.name ||
-                core.insulation.materialTypeName ||
-                insulationTypes.find(t => t._id === core.insulation.materialTypeId)?.name || '';
-            const reprocessName = core.insulation.reprocessMaterial?.name ||
-                core.insulation.reprocessMaterialTypeName ||
-                insulName;
-            if (insulName) {
-                details.push({
-                    type: 'insulation',
-                    coreIndex: idx,
-                    coreId: core.id,
-                    name: insulName,
-                    freshWeight: insulationCalc.freshWeight,
-                    reprocessWeight: insulationCalc.reprocessWeight,
-                    reprocessName: reprocessName,
-                    cost: insulationCalc.totalCost
-                });
-            }
-        });
-
-        sheathGroups.forEach((sg, idx) => {
-            const sheathCalc = calculateSheathForGroup(sg);
-            if (sheathCalc) {
-                totalCost += sheathCalc.totalCost;
-                // Use actual material name from the material object, fallback to type name
-                const sheathName = sg.materialObject?.name ||
-                    sg.material ||
-                    insulationTypes.find(t => t._id === sg.materialTypeId)?.name || '';
-                const reprocessName = sg.reprocessMaterialObject?.name ||
-                    sg.reprocessMaterialTypeName ||
-                    sheathName;
-                if (sheathName) {
-                    details.push({
-                        type: 'sheath',
-                        sheathIndex: idx,
-                        sheathId: sg.id,
-                        name: sheathName,
-                        freshWeight: sheathCalc.freshWeight,
-                        reprocessWeight: sheathCalc.reprocessWeight,
-                        reprocessName: reprocessName,
-                        cost: sheathCalc.totalCost
-                    });
-                }
-            }
-        });
-
-        return { totalCost, details };
-    };
-
-    const totals = calculateTotals();
-
-    // Calculate required materials for stock checking
-    const calculateRequiredMaterials = () => {
-        const requiredMaterials = [];
-
-        cores.forEach((core) => {
-            // Conductor material
-            if (core.selectedRod?._id) {
-                const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-                const drawingLength = calculateDrawingLength(core.wireCount, cableLength);
-                const conductorWeight = calculateMaterialWeight(
-                    wireDimensions.areaPerWire,
-                    drawingLength,
-                    core.materialDensity || 8.96,
-                    core.wastagePercent
-                );
-
-                requiredMaterials.push({
-                    materialId: core.selectedRod._id,
-                    materialName: core.selectedRod.name,
-                    category: 'metal',
-                    requiredWeight: parseFloat(conductorWeight.toFixed(4)),
-                    purpose: 'conductor'
-                });
-            }
-
-            // Insulation - fresh
-            if (core.insulation?.materialId && core.insulation?.freshPercent > 0) {
-                const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-                const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
-                const insulationCalc = calculateInsulation(
-                    coreDiameter,
-                    core.insulation.thickness,
-                    cableLength,
-                    'custom',
-                    core.insulation.freshPercent,
-                    0,
-                    core.insulation.freshPricePerKg || 0,
-                    null,
-                    core.insulation.density || 1.4,
-                    null
-                );
-
-                if (insulationCalc.freshWeight > 0) {
-                    requiredMaterials.push({
-                        materialId: core.insulation.materialId,
-                        materialName: core.insulation.material?.name || core.insulation.materialTypeName,
-                        category: 'insulation',
-                        requiredWeight: parseFloat(insulationCalc.freshWeight.toFixed(4)),
-                        purpose: 'insulation-fresh'
-                    });
-                }
-            }
-
-            // Insulation - reprocess
-            if (core.insulation?.reprocessPercent > 0) {
-                const reprocessMaterialId = core.insulation.reprocessMaterialId || core.insulation.materialId;
-                const reprocessMaterialName = core.insulation.reprocessMaterial?.name ||
-                    core.insulation.reprocessMaterialTypeName ||
-                    core.insulation.material?.name;
-
-                const wireDimensions = calculateWireDimensions(core.totalCoreArea, core.wireCount);
-                const coreDiameter = calculateCoreDiameter(wireDimensions.diameterPerWire, core.wireCount);
-                const insulationCalc = calculateInsulation(
-                    coreDiameter,
-                    core.insulation.thickness,
-                    cableLength,
-                    'custom',
-                    0,
-                    core.insulation.reprocessPercent,
-                    0,
-                    core.insulation.reprocessPricePerKg,
-                    core.insulation.reprocessDensity || core.insulation.density || 1.4,
-                    core.insulation.reprocessDensity || core.insulation.density || 1.4
-                );
-
-                if (insulationCalc.reprocessWeight > 0 && reprocessMaterialId) {
-                    requiredMaterials.push({
-                        materialId: reprocessMaterialId,
-                        materialName: reprocessMaterialName,
-                        category: 'insulation',
-                        requiredWeight: parseFloat(insulationCalc.reprocessWeight.toFixed(4)),
-                        purpose: 'insulation-reprocess'
-                    });
-                }
-            }
-        });
-
-        // Sheaths
-        sheathGroups.forEach((sg) => {
-            const sheathCalc = calculateSheathForGroup(sg);
-            if (sheathCalc) {
-                // Fresh sheath
-                if (sg.materialId && sg.freshPercent > 0 && sheathCalc.freshWeight > 0) {
-                    requiredMaterials.push({
-                        materialId: sg.materialId,
-                        materialName: sg.materialObject?.name || sg.material,
-                        category: 'plastic',
-                        requiredWeight: parseFloat(sheathCalc.freshWeight.toFixed(4)),
-                        purpose: 'sheath-fresh'
-                    });
-                }
-
-                // Reprocess sheath
-                if (sg.reprocessPercent > 0 && sheathCalc.reprocessWeight > 0) {
-                    const reprocessMaterialId = sg.reprocessMaterialId || sg.materialId;
-                    const reprocessMaterialName = sg.reprocessMaterialObject?.name ||
-                        sg.reprocessMaterialTypeName ||
-                        sg.material;
-
-                    if (reprocessMaterialId) {
-                        requiredMaterials.push({
-                            materialId: reprocessMaterialId,
-                            materialName: reprocessMaterialName,
-                            category: 'plastic',
-                            requiredWeight: parseFloat(sheathCalc.reprocessWeight.toFixed(4)),
-                            purpose: 'sheath-reprocess'
-                        });
-                    }
-                }
-            }
-        });
-
-        // Aggregate by materialId
-        const aggregated = {};
-        requiredMaterials.forEach(mat => {
-            if (aggregated[mat.materialId]) {
-                aggregated[mat.materialId].requiredWeight += mat.requiredWeight;
-            } else {
-                aggregated[mat.materialId] = { ...mat };
-            }
-        });
-
-        return Object.values(aggregated).map(mat => ({
-            ...mat,
-            requiredWeight: parseFloat(mat.requiredWeight.toFixed(4))
-        }));
-    };
 
     const handleSave = async (statusOverride) => {
         setSaving(true);
         try {
-            const processCost = quoteProcesses.reduce(
-                (sum, p) => sum + evalFormula(p.formula, p.variables), 0
-            );
-            const grandTotal = totals.totalCost + processCost;
-            const profitAmount = grandTotal * (profitMarginPercent / 100);
-            const finalPrice = grandTotal + profitAmount;
+
+            if (!quoteId) {
+                throw new Error('No quotation ID found. Please refresh the page.');
+            }
 
             const payload = {
                 customerId: selectedCustomerId || null,
                 cableLength,
-                cores,
-                sheathGroups,
-                quoteProcesses,
-                materialCost: totals.totalCost,
-                processCost,
-                grandTotal,
-                profitMarginPercent,
-                profitAmount,
-                finalPrice,
                 status: statusOverride || 'enquired',
-                requiredMaterialsQuantity: calculateRequiredMaterials(),
+                materialCost: totalMaterialCost,
+                processCost: totalProcessCost,
+                grandTotal: totalMaterialCost + totalProcessCost,
+                notes: "Nothing",
             };
 
-            if (quoteId) {
-                await api.put(`/quotation/update-quotation/${quoteId}`, payload);
-            } else {
-                await api.post('/quotation/create-quotation', payload);
-            }
+            console.log(payload);
+
+            // Update the quotation (cores already saved individually)
+            await api.patch(`/quotation/patch-quotation/${quoteId}`, payload);
+
             navigate('/quotations');
         } catch (err) {
             alert('Failed to save: ' + (err.message || 'Unknown error'));
@@ -689,9 +233,11 @@ const CreateQuotePage = () => {
 
     useEffect(() => {
         const handleScroll = () => {
+            const cores = quotation?.cores || [];
+            const sheathGroups = quotation?.sheathGroups || [];
             const sections = [
-                ...cores.map(c => `core-${c.id}`),
-                ...sheathGroups.map(sg => `sheath-${sg.id}`),
+                ...cores.map(c => `core-${c._id}`),
+                ...sheathGroups.map(sg => `sheath-${sg._id}`),
                 'quotation-summary'
             ];
 
@@ -708,7 +254,7 @@ const CreateQuotePage = () => {
 
             // Check if first core has crossed center of screen
             if (cores.length > 0) {
-                const firstCore = document.getElementById(`core-${cores[0].id}`);
+                const firstCore = document.getElementById(`core-${cores[0]._id}`);
                 if (firstCore) {
                     const rect = firstCore.getBoundingClientRect();
                     // Show horizontal progress when first core crosses center (going up)
@@ -721,7 +267,7 @@ const CreateQuotePage = () => {
         handleScroll();
 
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [cores, sheathGroups]);
+    }, [quotation?.cores, quotation?.sheathGroups]);
 
     // Scroll to section helper
     const scrollToSection = (sectionId) => {
@@ -731,6 +277,48 @@ const CreateQuotePage = () => {
         }
     };
 
+    // Show loading state
+    if (quotationLoading) {
+        return (
+            <div className="w-full max-w-7xl mx-auto bg-gray-50 min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                    <p className="text-lg font-semibold text-gray-700">Loading quotation...</p>
+                    <p className="text-sm text-gray-500 mt-1">Please wait while we fetch the quotation details</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (quotationError) {
+        return (
+            <div className="w-full max-w-7xl mx-auto bg-gray-50 min-h-screen flex items-center justify-center">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md text-center">
+                    <div className="text-red-600 text-5xl mb-4">⚠️</div>
+                    <h2 className="text-xl font-bold text-red-800 mb-2">Error Loading Quotation</h2>
+                    <p className="text-sm text-red-600 mb-4">{quotationError}</p>
+                    <div className="flex gap-3 justify-center">
+                        <button
+                            onClick={() => navigate('/quotations')}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium"
+                        >
+                            Back to Quotations
+                        </button>
+                        <button
+                            onClick={() => fetchQuotationById(quoteId, true)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    console.log(quotation);
+
     return (
         <div className="w-full max-w-7xl mx-auto bg-gray-50 relative">
             {/* Horizontal Progress Bar - Appears after first core crosses center */}
@@ -738,12 +326,12 @@ const CreateQuotePage = () => {
                 }`}>
                 <div className="max-w-7xl mx-auto px-4 py-2">
                     <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
-                        {cores.map((core, idx) => {
-                            const sectionId = `core-${core.id}`;
+                        {(quotation?.cores || []).map((core, idx) => {
+                            const sectionId = `core-${core._id}`;
                             const isActive = activeSection === sectionId;
                             return (
                                 <button
-                                    key={core.id}
+                                    key={core._id}
                                     onClick={() => scrollToSection(sectionId)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${isActive
                                         ? 'bg-blue-600 text-white shadow-sm'
@@ -756,12 +344,12 @@ const CreateQuotePage = () => {
                                 </button>
                             );
                         })}
-                        {sheathGroups.map((sg, idx) => {
-                            const sectionId = `sheath-${sg.id}`;
+                        {(quotation?.sheathGroups || []).map((sg, idx) => {
+                            const sectionId = `sheath-${sg._id}`;
                             const isActive = activeSection === sectionId;
                             return (
                                 <button
-                                    key={sg.id}
+                                    key={sg._id}
                                     onClick={() => scrollToSection(sectionId)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${isActive
                                         ? 'bg-teal-600 text-white shadow-sm'
@@ -774,6 +362,17 @@ const CreateQuotePage = () => {
                                 </button>
                             );
                         })}
+                        <button
+                            onClick={() => scrollToSection('material-summary')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${activeSection === 'material-summary'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                        >
+                            <div className={`w-1.5 h-1.5 rounded-full ${activeSection === 'material-summary' ? 'bg-white' : 'bg-gray-400'
+                                }`}></div>
+                            Materials
+                        </button>
                         <button
                             onClick={() => scrollToSection('quotation-summary')}
                             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all ${activeSection === 'quotation-summary'
@@ -803,7 +402,7 @@ const CreateQuotePage = () => {
                         </button>
                         <div>
                             <h1 className="text-2xl font-bold text-gray-800">
-                                {quoteId ? `Edit Quotation${quoteNumber ? ` · ${quoteNumber}` : ''}` : 'New Cable Quotation'}
+                                {quoteId ? `Edit Quotation${quotation.quoteNumber ? ` · ${quotation.quoteNumber}` : ''}` : 'New Cable Quotation'}
                             </h1>
                             <p className="text-sm text-gray-500 mt-0.5">
                                 Comprehensive calculator for multi-core wire and cable manufacturing
@@ -838,40 +437,10 @@ const CreateQuotePage = () => {
                 </div>
 
                 {/* Customer Selection */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-                    <div className="flex items-start gap-4">
-                        <div className="flex-1">
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                Customer
-                            </label>
-                            <select
-                                value={selectedCustomerId}
-                                onChange={e => setSelectedCustomerId(e.target.value)}
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                            >
-                                <option value="">— Select customer (optional) —</option>
-                                {customers.filter(c => c.isActive !== false).map(c => (
-                                    <option key={c._id} value={c._id}>{c.companyName}</option>
-                                ))}
-                            </select>
-                        </div>
-                        {selectedCustomerId && (() => {
-                            const c = customers.find(x => x._id === selectedCustomerId);
-                            if (!c) return null;
-                            const primary = c.contacts?.find(ct => ct.isPrimary) || c.contacts?.[0];
-                            return (
-                                <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-600 min-w-48">
-                                    <p className="font-semibold text-gray-800 mb-1">{c.companyName}</p>
-                                    {c.address?.city && (
-                                        <p>{c.address.city}{c.address.state ? `, ${c.address.state}` : ''}</p>
-                                    )}
-                                    {primary?.phone && <p>{primary.phone}</p>}
-                                    {primary?.email && <p className="truncate">{primary.email}</p>}
-                                </div>
-                            );
-                        })()}
-                    </div>
-                </div>
+                <CustomerSelector
+                    selectedCustomerId={selectedCustomerId}
+                    setSelectedCustomerId={setSelectedCustomerId}
+                />
 
                 {/* Shared Cable Length */}
                 <div className="bg-linear-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-5 mb-8 mt-8">
@@ -920,18 +489,15 @@ const CreateQuotePage = () => {
                     </button>
                 </div>
 
-                {cores.map((core, idx) => (
+                {(quotation?.cores || []).map((core, idx) => (
                     <CoreComponent
-                        key={core.id}
+                        key={core._id || idx}
                         core={core}
                         index={idx}
                         cableLength={cableLength}
-                        onUpdate={updateCore}
-                        onDelete={deleteCore}
-                        metalTypes={metalTypes}
-                        metalRawMaterials={metalRawMaterials}
-                        insulationTypes={insulationTypes}
-                        insulationRawMaterials={insulationRawMaterials}
+                        quotationId={quoteId}
+                        onDeleteFromParent={deleteCore}
+                        onDuplicate={duplicateCore}
                     />
                 ))}
 
@@ -954,27 +520,23 @@ const CreateQuotePage = () => {
                     </button>
                 </div>
 
-                {sheathGroups.map((sg, idx) => (
+                {(quotation?.sheathGroups || []).map((sg, idx) => (
                     <SheathComponent
-                        key={sg.id}
+                        key={sg._id || idx}
                         sheathGroup={sg}
                         index={idx}
-                        cores={cores}
-                        sheathGroups={sheathGroups}
-                        onUpdate={updateSheathGroup}
-                        onDelete={deleteSheathGroup}
-                        insulationTypes={insulationTypes}
-                        insulationRawMaterials={insulationRawMaterials}
-                        calculateSheathForGroup={calculateSheathForGroup}
-                        getAvailableCores={getAvailableCores}
-                        getAvailableSheaths={getAvailableSheaths}
+                        cableLength={cableLength}
+                        quotationId={quoteId}
+                        cores={quotation?.cores || []}
+                        sheathGroups={quotation?.sheathGroups || []}
+                        onDeleteFromParent={deleteSheathGroup}
                     />
                 ))}
 
-                {/* Manufacturing Processes (from Process Master) */}
+                {/* Cable-Level Processes */}
                 <div className="mt-8">
-                    <QuoteProcessSection
-                        processes={quoteProcesses}
+                    <QuoteLevelProcesses
+                        quoteProcesses={quoteProcesses}
                         onAdd={addQuoteProcess}
                         onRemove={removeQuoteProcess}
                         onUpdateVariable={updateProcessVariable}
@@ -983,12 +545,21 @@ const CreateQuotePage = () => {
                     />
                 </div>
 
+                {/* Manufacturing Process Summary - Aggregated view of all processes */}
+                <div className="mt-8">
+                    <ManufacturingProcessSummary
+                        quotation={quotation}
+                    />
+                </div>
+
+                {/* Material Requirements Summary */}
+                <MaterialSummary quotation={quotation} />
+
                 {/* Quotation Summary */}
                 <QuotationSummary
-                    totals={totals}
-                    quoteProcesses={quoteProcesses}
-                    profitMarginPercent={profitMarginPercent}
-                    onProfitMarginChange={setProfitMarginPercent}
+                    totalMaterialCost={totalMaterialCost}
+                    totalProcessCost={totalProcessCost}
+                    totalCosting={totalMaterialCost + totalProcessCost}
                 />
             </div>
         </div>

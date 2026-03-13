@@ -74,7 +74,6 @@ const Sidebar = () => {
                     >
                         <SidebarSubItem label="Suppliers" to="/suppliers" />
                         <SidebarSubItem label="Purchase Orders" to="/purchase-orders" />
-                        <SidebarSubItem label="GRN" to="/grn" />
                     </SidebarGroup>
 
                     <SidebarGroup
@@ -93,6 +92,8 @@ const Sidebar = () => {
                         collapsed={collapsed}
                     >
                         <SidebarSubItem label="Process Master" to="/process-master" />
+                        <SidebarSubItem label="Core Master" to="/core-master" />
+                        <SidebarSubItem label="Intermediate Products" to="/intermediate-products" />
                         <SidebarSubItem label="Locations" to="/settings/locations" />
                     </SidebarGroup>
 

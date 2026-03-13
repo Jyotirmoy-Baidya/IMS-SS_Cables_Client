@@ -103,7 +103,7 @@ export const calculateCoreDiameter = (wireDiameter, wireCount) => {
     return wireDiameter;
   }
 
-  const packingEfficiency = 0.90;
+  // const packingEfficiency = 0.90;
   // return wireDiameter * Math.sqrt(wireCount / packingEfficiency);
   // Approximate formula for stranded conductor diameter
   return Math.sqrt(wireCount) * wireDiameter / 2;
@@ -130,7 +130,8 @@ export const calculateInsulation = (
   freshPricePerKg,
   reprocessPricePerKg = null,
   customDensity = null,
-  reprocessDensity = null   // density for reprocess material (if different type from fresh)
+  reprocessDensity = null,   // density for reprocess material (if different type from fresh)
+  wastagePercent = 0         // wastage percentage (default 0%)
 ) => {
   const insulatedDiameter = coreDiameter + (2 * insulationThickness);
 
@@ -145,16 +146,15 @@ export const calculateInsulation = (
     || INSULATION_DENSITIES.pvc;
   const reprocessDens = reprocessDensity || freshDens;
 
-  // Use separate densities for each portion (backward-compat: same result when densities are equal)
-  const freshWeight = (totalVolumeCm3 * (freshPercent / 100) * freshDens) / 1000;
-  const reprocessWeight = (totalVolumeCm3 * (reprocessPercent / 100) * reprocessDens) / 1000;
+  // Calculate weights with wastage percentage
+  const freshWeight = (totalVolumeCm3 * (freshPercent / 100) * freshDens * (1 + wastagePercent / 100)) / 1000;
+  const reprocessWeight = (totalVolumeCm3 * (reprocessPercent / 100) * reprocessDens * (1 + wastagePercent / 100)) / 1000;
   const totalWeight = freshWeight + reprocessWeight;
 
   // Use actual reprocess price if set, else fall back to 70% of fresh price
   const effectiveReprocessPrice = (reprocessPricePerKg != null && reprocessPricePerKg > 0)
     ? reprocessPricePerKg
     : freshPricePerKg * 0.7;
-
   const freshCost = freshWeight * freshPricePerKg;
   const reprocessCost = reprocessWeight * effectiveReprocessPrice;
 
@@ -238,7 +238,7 @@ export const calculateProcessCosts = (params) => {
     strandingRate,
     annealingRate,
     insulationRate,
-    sheathingRate
+    // sheathingRate
   } = params;
 
   const costs = {};
