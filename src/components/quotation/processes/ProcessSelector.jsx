@@ -17,7 +17,6 @@ const SOURCE_LABELS = {
 
     // Core conductor
     coreMaterialDensity: 'Core Material Density (g/cm³)',
-    coreTotalCoreArea: 'Core Total Area (mm²)',
     coreWireCount: 'Core Wire Count',
     coreWastagePercent: 'Core Wastage %',
     coreHasAnnealing: 'Core Has Annealing',

@@ -64,6 +64,7 @@ const CoreComponent = ({
             materialId: null,
             selectedRod: null,
             totalCoreArea: 8,
+            areaPerWire: 0,
             wireCount: 16,
             wireDiameter: 0,
             conductorDiameter: 0,
@@ -226,7 +227,8 @@ const CoreComponent = ({
                     wireDiameter: parseFloat(wireDiameter.toFixed(4)),
                     conductorDiameter: parseFloat(conductorDiameter.toFixed(4)),
                     drawingLength: parseFloat(drawingLength.toFixed(2)),
-                    materialWeight: parseFloat(materialWeight.toFixed(4))
+                    materialWeight: parseFloat(materialWeight.toFixed(4)),
+                    areaPerWire: parseFloat(areaPerWire.toFixed(4))
                 }
             }));
         }
@@ -387,7 +389,6 @@ const CoreComponent = ({
         try {
             // Build material requirements with pricing
             const materialRequired = await buildMaterialRequirements(core);
-            console.log(core.conductor.conductorDiameter, "test", calculateOuterArea(core.conductor.conductorDiameter + (core.insulation?.thickness || 0) + (core.insulation?.thickness || 0)).toFixed(2));
             // Prepare core data with material requirements and costs
             const coreData = {
                 ...core,
@@ -405,6 +406,7 @@ const CoreComponent = ({
             let response;
             if (core._id) {
                 // Update existing core
+                console.log("coredate", coreData);
                 response = await api.put(`/quotation/${quotationId}/cores/${core._id}`, coreData);
             } else {
                 // Create new core
@@ -491,6 +493,7 @@ const CoreComponent = ({
         return {
             wireCount: core.conductor?.wireCount || 0,
             wireDiameter: core.conductor?.wireDiameter || 0,
+            areaPerWire: core.conductor?.areaPerWire || 0,
             totalCoreArea: core.conductor?.totalCoreArea || 0,
             conductorDiameter: core.conductor?.conductorDiameter || 0,
             drawingLength: core.conductor?.drawingLength || 0,
@@ -774,23 +777,12 @@ const CoreComponent = ({
                                 />
                             </div>
 
-                            {/* Annealing */}
-                            <div className="flex items-end pb-0.5">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={core.conductor?.hasAnnealing || false}
-                                        onChange={e => handleCoreUpdate('hasAnnealing', e.target.checked)}
-                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-300"
-                                    />
-                                    <span className="text-sm text-gray-600 font-medium">Annealing</span>
-                                </label>
-                            </div>
+
                         </div>
 
                         {/* Calculated wire dimensions */}
                         <div className="grid grid-cols-3 gap-2 mt-3">
-                            <StatBox label="Area / Wire" value={`${fmtN(Math.PI * core.conductor.wireDiameter)} mm²`} />
+                            <StatBox label="Area / Wire" value={`${core.conductor.areaPerWire} mm²`} />
                             <StatBox label="Dia / Wire" value={`${core.conductor.wireDiameter} mm`} />
                             <StatBox label="Core Diameter" value={`${core.conductor.conductorDiameter} mm`} accent />
                         </div>

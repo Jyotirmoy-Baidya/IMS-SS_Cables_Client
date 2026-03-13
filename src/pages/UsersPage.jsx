@@ -42,6 +42,8 @@ const UsersPage = () => {
         fetchUsers();
     }, []);
 
+    console.log(users);
+
     const handleCreate = () => {
         setEditingUser(null);
         setShowModal(true);
@@ -160,7 +162,6 @@ const UsersPage = () => {
                             <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Primary Phone</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Location</th>
                             <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                             <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
                         </tr>
@@ -193,15 +194,9 @@ const UsersPage = () => {
 
                                 {/* Primary Phone */}
                                 <td className="px-4 py-3 text-gray-600">
-                                    {u.primaryPhone || '—'}
+                                    {u.phoneNumber || '—'}
                                 </td>
 
-                                {/* Location */}
-                                <td className="px-4 py-3 text-gray-600">
-                                    {u.address?.city && u.address?.state
-                                        ? `${u.address.city}, ${u.address.state}`
-                                        : u.address?.city || '—'}
-                                </td>
 
                                 {/* Status */}
                                 <td className="px-4 py-3 text-center">

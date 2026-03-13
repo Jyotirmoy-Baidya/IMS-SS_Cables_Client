@@ -207,7 +207,6 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
 
             await api.patch(`/process-in-work-order/${processId}/status`, {
                 status: newStatus,
-                userId: 'admin-user-id', // TODO: Get from auth context
                 userName: 'Admin' // TODO: Get from auth context
             });
 

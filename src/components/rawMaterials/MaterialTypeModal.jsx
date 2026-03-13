@@ -124,6 +124,7 @@ const MaterialTypeModal = ({ open, onClose, onSuccess, materialType = null }) =>
                   <option value="metal">Metal</option>
                   <option value="plastic">Plastic</option>
                   <option value="insulation">Insulation</option>
+                  <option value="alloy">Alloy</option>
                   <option value="other">Other</option>
                 </select>
               </div>

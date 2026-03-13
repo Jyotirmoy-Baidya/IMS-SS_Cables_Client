@@ -19,6 +19,7 @@ const CreateOutputProductModal = ({ process, onClose, onSuccess }) => {
                 storageLocation: '',
                 quantity: process.output?.calculatedQuantity || 0
             });
+
         }
     }, [process]);
 
