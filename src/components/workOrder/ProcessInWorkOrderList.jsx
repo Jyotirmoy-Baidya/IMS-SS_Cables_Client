@@ -10,6 +10,8 @@ import AddOutputModal from '../processTracking/AddOutputModal';
 import UpdateProgressModal from '../processTracking/UpdateProgressModal';
 import SubmitReportModal from '../processTracking/SubmitReportModal';
 import ProcessStatusBanner from '../processTracking/ProcessStatusBanner';
+import CreateOutputProductModal from './CreateOutputProductModal';
+import InventoryItemDisplay from './InventoryItemDisplay';
 
 const STATUS_CONFIG = {
     pending: { label: 'Pending', bg: 'bg-amber-100', text: 'text-amber-700' },
@@ -35,6 +37,10 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
     const [processDependencies, setProcessDependencies] = useState({});
     const [showSubmitReport, setShowSubmitReport] = useState(false);
     const [reportProcess, setReportProcess] = useState(null);
+
+    // Create output product state
+    const [showCreateOutput, setShowCreateOutput] = useState(false);
+    const [createOutputProcess, setCreateOutputProcess] = useState(null);
 
     // Process update form
     const [processForm, setProcessForm] = useState({
@@ -134,6 +140,15 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
         setShowAddOutput(true);
     };
 
+    const handleOpenCreateOutputModal = (process) => {
+        if (!process) {
+            alert('Process data not available');
+            return;
+        }
+        setCreateOutputProcess(process);
+        setShowCreateOutput(true);
+    };
+
     const handleInputAdded = () => {
         setShowAddInput(false);
         setSelectedProcess(null);
@@ -164,7 +179,7 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
         if (onRefresh) onRefresh();
     };
 
-    const handleUpdateProcess = async (processId) => {
+    const handleUpdateProgress = async (processId) => {
         try {
             setUpdating(true);
 
@@ -181,6 +196,26 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
             if (onRefresh) onRefresh();
         } catch (err) {
             alert('Failed to update process: ' + err.message);
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleStatusChange = async (processId, newStatus) => {
+        try {
+            setUpdating(true);
+
+            await api.patch(`/process-in-work-order/${processId}/status`, {
+                status: newStatus,
+                userId: 'admin-user-id', // TODO: Get from auth context
+                userName: 'Admin' // TODO: Get from auth context
+            });
+
+            alert(`Status changed to ${newStatus}`);
+            fetchProcesses();
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            alert('Failed to update status: ' + err.message);
         } finally {
             setUpdating(false);
         }
@@ -292,6 +327,35 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
                                             <p className="text-xs text-red-700 mt-1">{process.blockReason}</p>
                                         </div>
                                     )}
+
+                                    {/* Quick Status Update */}
+                                    <div className="bg-white border border-gray-200 rounded-lg p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Activity size={14} className="text-gray-600" />
+                                                <label className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                                                    Update Status
+                                                </label>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <select
+                                                    value={process.status}
+                                                    onChange={(e) => {
+                                                        if (window.confirm(`Change status to ${e.target.value}?`)) {
+                                                            handleStatusChange(process._id, e.target.value);
+                                                        }
+                                                    }}
+                                                    disabled={updating}
+                                                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-50"
+                                                >
+                                                    <option value="pending">Pending</option>
+                                                    <option value="in-progress">In Progress</option>
+                                                    <option value="completed">Completed</option>
+                                                    <option value="on-hold">On Hold</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     {/* Expected Output Section */}
                                     {process.output && process.output.calculatedQuantity > 0 && (
@@ -542,6 +606,14 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
                                                 </div>
                                             )}
 
+                                            {/* Linked Inventory Item Display */}
+                                            {(process.producedOutputDetails?.wipInventoryItemId || process.producedOutputDetails?.finishedGoodId) && (
+                                                <InventoryItemDisplay
+                                                    wipInventoryItemId={process.producedOutputDetails.wipInventoryItemId}
+                                                    finishedGoodId={process.producedOutputDetails.finishedGoodId}
+                                                />
+                                            )}
+
                                             {/* Action Buttons */}
                                             <div className="grid grid-cols-2 gap-2">
                                                 <button
@@ -560,14 +632,16 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
                                                     <Plus size={14} />
                                                     Add Input (Consume)
                                                 </button>
-                                                <button
-                                                    onClick={() => handleOpenOutputModal(process)}
-                                                    disabled={!process.canStart}
-                                                    className="px-3 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                                >
-                                                    <TrendingUp size={14} />
-                                                    Add Output (Produce)
-                                                </button>
+                                                {!process.producedOutputDetails?.wipInventoryItemId && !process.producedOutputDetails?.finishedGoodId && (
+                                                    <button
+                                                        onClick={() => handleOpenCreateOutputModal(process)}
+                                                        disabled={!process.canStart}
+                                                        className="px-3 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                                    >
+                                                        <TrendingUp size={14} />
+                                                        Add Output (Produce)
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => navigate(`/process-in-work-order/${process._id}`)}
                                                     className="px-3 py-2 text-sm font-semibold bg-gray-700 text-white rounded-lg hover:bg-gray-800 flex items-center justify-center gap-2"
@@ -619,7 +693,7 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
                                             Cancel
                                         </button>
                                         <button
-                                            onClick={() => handleUpdateProcess(process._id)}
+                                            onClick={() => handleUpdateProgress(process._id)}
                                             disabled={updating || !process.canStart}
                                             className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
@@ -712,6 +786,22 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
                     onSuccess={() => {
                         setShowSubmitReport(false);
                         setReportProcess(null);
+                        fetchProcesses();
+                        if (onRefresh) onRefresh();
+                    }}
+                />
+            )}
+
+            {showCreateOutput && createOutputProcess && (
+                <CreateOutputProductModal
+                    process={createOutputProcess}
+                    onClose={() => {
+                        setShowCreateOutput(false);
+                        setCreateOutputProcess(null);
+                    }}
+                    onSuccess={() => {
+                        setShowCreateOutput(false);
+                        setCreateOutputProcess(null);
                         fetchProcesses();
                         if (onRefresh) onRefresh();
                     }}

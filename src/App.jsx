@@ -1,4 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import useAuthStore from './store/authStore'
 import DashboardLayout from './layouts/DashboardLayout'
 import CreateQuotePage from './pages/CreateQuotePage'
 import QuotationsPage from './pages/QuotationsPage'
@@ -18,8 +20,16 @@ import EmployeeLoginPage from './pages/EmployeeLoginPage'
 import EmployeeDashboardPage from './pages/EmployeeDashboardPage'
 import IntermediateProductPage from './pages/IntermediateProductPage'
 import CoreMasterPage from './pages/CoreMasterPage'
+import RegisterPage from './pages/RegisterPage'
+import LoginPage from './pages/LoginPage'
 
 const App = () => {
+  const initAuth = useAuthStore((state) => state.initAuth);
+
+  useEffect(() => {
+    initAuth();
+  }, [initAuth]);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -47,12 +57,9 @@ const App = () => {
           <Route path='work-orders/kanban' element={<WorkOrderKanbanPage />} />
           <Route path='work-order/:id' element={<WorkOrderDetailPage />} />
           <Route path='settings/locations' element={<LocationsPage />} />
-
-
-
         </Route>
-        <Route path="/employee/login" element={<EmployeeLoginPage />} />
-        <Route path="/employee/:employeeId/dashboard" element={<EmployeeDashboardPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
       </Routes>
     </BrowserRouter>
   )
