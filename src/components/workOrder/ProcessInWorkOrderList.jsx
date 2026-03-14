@@ -5,7 +5,7 @@ import {
     TrendingUp, Plus, ExternalLink, CheckCircle2, Clock
 } from 'lucide-react';
 import api from '../../api/axiosInstance';
-import AddInputModal from './AddInputModal';
+import AddInputModal from './processInWorkOrder/AddInputModal';
 import AddOutputModal from '../processTracking/AddOutputModal';
 import UpdateProgressModal from '../processTracking/UpdateProgressModal';
 import SubmitReportModal from '../processTracking/SubmitReportModal';
@@ -614,15 +614,8 @@ const ProcessInWorkOrderList = ({ workOrderId, onRefresh }) => {
                                             )}
 
                                             {/* Action Buttons */}
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button
-                                                    onClick={() => handleOpenUpdateProgressModal(process)}
-                                                    disabled={!process.canStart}
-                                                    className="px-3 py-2 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                                >
-                                                    <Activity size={14} />
-                                                    Update Status & Progress
-                                                </button>
+                                            <div className="grid grid-cols-1 gap-2">
+
                                                 <button
                                                     onClick={() => handleOpenInputModal(process)}
                                                     disabled={!process.canStart}

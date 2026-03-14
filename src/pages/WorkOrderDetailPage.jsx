@@ -130,8 +130,10 @@ const WorkOrderDetailPage = () => {
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Material</th>
                                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Lot Number</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Allocated Weight</th>
-                                    <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Allocated Date</th>
+                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Allocated</th>
+                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Planned Usage</th>
+                                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Consumed</th>
+                                    <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Date</th>
                                     <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>
                                 </tr>
                             </thead>
@@ -154,6 +156,16 @@ const WorkOrderDetailPage = () => {
                                         <td className="px-6 py-3 text-right">
                                             <span className="font-semibold text-gray-800">
                                                 {allocated.allocatedWeight?.toFixed(2) || '0.00'} kg
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-3 text-right">
+                                            <span className="font-semibold text-blue-700">
+                                                {(allocated.plannedWeightToUse || allocated.allocatedWeight)?.toFixed(2) || '0.00'} kg
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-3 text-right">
+                                            <span className="font-semibold text-green-700">
+                                                {allocated.consumedQuantity?.weight?.toFixed(2) || '0.00'} kg
                                             </span>
                                         </td>
                                         <td className="px-6 py-3 text-center text-gray-600">

@@ -92,8 +92,6 @@ const Sidebar = () => {
                         collapsed={collapsed}
                     >
                         <SidebarSubItem label="Process Master" to="/process-master" />
-                        <SidebarSubItem label="Core Master" to="/core-master" />
-                        <SidebarSubItem label="Intermediate Products" to="/intermediate-products" />
                         <SidebarSubItem label="Locations" to="/settings/locations" />
                     </SidebarGroup>
 

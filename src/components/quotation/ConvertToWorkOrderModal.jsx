@@ -15,6 +15,27 @@ const ConvertToWorkOrderModal = ({ quotationId, onClose, onSuccess }) => {
     const { calculateAllProcessInQuotation } = useQuotationProcessStore();
     const { calculateAll } = useMaterialRequirementsStore();
 
+    // Merge material requirements by materialId + type (composite key) and sum quantities
+    const mergeMaterialRequirements = (requirements) => {
+        const merged = {};
+
+        requirements.forEach(req => {
+            // Create composite key using both materialId and type for uniqueness
+            const key = `${req.materialId}_${req.type || 'raw-material'}`;
+
+            if (merged[key]) {
+                // If material with same ID and type already exists, add to the quantity
+                merged[key].weight += req.weight;
+            } else {
+                // Create new entry
+                merged[key] = { ...req };
+            }
+        });
+
+        // Convert back to array
+        return Object.values(merged);
+    };
+
     useEffect(() => {
         const fetchEmployeesAndInitialize = async () => {
             try {
@@ -24,8 +45,12 @@ const ConvertToWorkOrderModal = ({ quotationId, onClose, onSuccess }) => {
                 const allProcessesCalc = await calculateAllProcessInQuotation(quotationId);
 
                 // Calculate material requirements
-                const materials = await calculateAll(quotationId);
-                setMaterialRequirements(materials || []);
+                const materialRequirements = await calculateAll(quotationId);
+
+                const mergedRequirements = mergeMaterialRequirements(materialRequirements);
+                setMaterialRequirements(mergedRequirements || []);
+
+                console.log(mergedRequirements, materialRequirements)
 
                 // Fetch all active employees, locations, and final quote price in parallel
                 const [empRes, locRes, quotePriceRes] = await Promise.all([

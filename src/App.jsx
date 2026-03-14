@@ -25,6 +25,7 @@ import LoginPage from './pages/LoginPage'
 import EmployeeDashboardLayout from './layouts/EmployeeDashboardLayout'
 import EmployeeDashboard from './pages/EmployeeDashboard'
 import EmployeeProcessDetailPage from './pages/EmployeeProcessDetailPage'
+import ProcessInWorkOrderDetailPage from './pages/ProcessInWorkOrderDetailPage'
 
 const App = () => {
   const initAuth = useAuthStore((state) => state.initAuth);
@@ -59,6 +60,7 @@ const App = () => {
           <Route path='work-orders' element={<WorkOrdersPage />} />
           <Route path='work-orders/kanban' element={<WorkOrderKanbanPage />} />
           <Route path='work-order/:id' element={<WorkOrderDetailPage />} />
+          <Route path='process-in-work-order/:id' element={<ProcessInWorkOrderDetailPage />} />
           <Route path='settings/locations' element={<LocationsPage />} />
         </Route>
 

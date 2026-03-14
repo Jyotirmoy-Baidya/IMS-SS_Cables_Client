@@ -12,10 +12,13 @@ import {
     XCircle,
     FileText,
     Box,
-    AlertTriangle
+    AlertTriangle,
+    Plus
 } from 'lucide-react';
 import api from '../api/axiosInstance';
 import useAuthStore from '../store/authStore';
+import CreateOutputProductModal from '../components/employee/CreateOutputProductModal';
+import AddInputModal from '../components/employee/AddInputModal';
 
 const STATUS_CONFIG = {
     pending: { label: 'Pending', bg: 'bg-amber-100', text: 'text-amber-700', icon: Clock },
@@ -35,14 +38,9 @@ const EmployeeProcessDetailPage = () => {
     const [dependencies, setDependencies] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Create output product state
-    const [showCreateOutput, setShowCreateOutput] = useState(false);
-    const [outputForm, setOutputForm] = useState({
-        itemName: '',
-        specifications: '',
-        storageLocation: ''
-    });
-    const [creatingOutput, setCreatingOutput] = useState(false);
+    // Modal states
+    const [showCreateOutputModal, setShowCreateOutputModal] = useState(false);
+    const [showAddInputModal, setShowAddInputModal] = useState(false);
 
     // Update progress state
     const [showUpdateProgress, setShowUpdateProgress] = useState(false);
@@ -113,31 +111,6 @@ const EmployeeProcessDetailPage = () => {
             }
         } catch (err) {
             console.error('Failed to check dependencies:', err);
-        }
-    };
-
-    const handleCreateOutput = async (e) => {
-        e.preventDefault();
-
-        if (!outputForm.itemName) {
-            alert('Item name is required');
-            return;
-        }
-
-        try {
-            setCreatingOutput(true);
-            const response = await api.post(`/employee/create-output-product/${id}`, outputForm);
-
-            if (response.success) {
-                alert(response.message);
-                setShowCreateOutput(false);
-                setOutputForm({ itemName: '', specifications: '', storageLocation: '' });
-                fetchProcessDetails(); // Refresh to show created output
-            }
-        } catch (err) {
-            alert(err.message || 'Failed to create output product');
-        } finally {
-            setCreatingOutput(false);
         }
     };
 
@@ -309,70 +282,13 @@ const EmployeeProcessDetailPage = () => {
                         </p>
                     </div>
                 ) : (
-                    <>
-                        {!showCreateOutput ? (
-                            <button
-                                onClick={() => setShowCreateOutput(true)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                            >
-                                <Box size={18} />
-                                Create Output Product
-                            </button>
-                        ) : (
-                            <form onSubmit={handleCreateOutput} className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Item Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={outputForm.itemName}
-                                        onChange={(e) => setOutputForm({ ...outputForm, itemName: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Specifications
-                                    </label>
-                                    <textarea
-                                        value={outputForm.specifications}
-                                        onChange={(e) => setOutputForm({ ...outputForm, specifications: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        rows="2"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Storage Location
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={outputForm.storageLocation}
-                                        onChange={(e) => setOutputForm({ ...outputForm, storageLocation: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="submit"
-                                        disabled={creatingOutput}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                    >
-                                        {creatingOutput ? 'Creating...' : 'Create'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCreateOutput(false)}
-                                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-                    </>
+                    <button
+                        onClick={() => setShowCreateOutputModal(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    >
+                        <Box size={18} />
+                        Create Output Product
+                    </button>
                 )}
             </div>
 
@@ -391,19 +307,7 @@ const EmployeeProcessDetailPage = () => {
                 ) : (
                     <form onSubmit={handleUpdateProgress} className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Progress %
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={progressForm.progressPercentage}
-                                    onChange={(e) => setProgressForm({ ...progressForm, progressPercentage: Number(e.target.value) })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Produced Quantity
@@ -414,30 +318,6 @@ const EmployeeProcessDetailPage = () => {
                                     step="0.01"
                                     value={progressForm.producedQuantity}
                                     onChange={(e) => setProgressForm({ ...progressForm, producedQuantity: Number(e.target.value) })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Produced Weight
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={progressForm.producedWeight}
-                                    onChange={(e) => setProgressForm({ ...progressForm, producedWeight: Number(e.target.value) })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Quality Grade
-                                </label>
-                                <input
-                                    type="text"
-                                    value={progressForm.qualityGrade}
-                                    onChange={(e) => setProgressForm({ ...progressForm, qualityGrade: e.target.value })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
@@ -473,6 +353,23 @@ const EmployeeProcessDetailPage = () => {
                 )}
             </div>
 
+            {/* Add Input Button */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold text-gray-800">Input Management</h2>
+                    <button
+                        onClick={() => setShowAddInputModal(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    >
+                        <Plus size={18} />
+                        Add Input (Consume Material)
+                    </button>
+                </div>
+                <p className="text-sm text-gray-500">
+                    Add raw materials or WIP items consumed during this process
+                </p>
+            </div>
+
             {/* Allocated Materials */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="text-lg font-bold text-gray-800 mb-4">Allocated Materials</h2>
@@ -483,7 +380,7 @@ const EmployeeProcessDetailPage = () => {
                     <div className="space-y-3">
                         {materials.map((material, index) => (
                             <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                                     <div>
                                         <p className="text-gray-500">Material</p>
                                         <p className="font-medium text-gray-800">
@@ -503,8 +400,14 @@ const EmployeeProcessDetailPage = () => {
                                         </p>
                                     </div>
                                     <div>
+                                        <p className="text-gray-500">Planned Usage</p>
+                                        <p className="font-medium text-blue-700">
+                                            {material.plannedWeightToUse || material.allocatedWeight || 0} kg
+                                        </p>
+                                    </div>
+                                    <div>
                                         <p className="text-gray-500">Consumed</p>
-                                        <p className="font-medium text-gray-800">
+                                        <p className="font-medium text-green-700">
                                             {material.consumedQuantity?.weight || 0} kg
                                         </p>
                                     </div>
@@ -552,6 +455,30 @@ const EmployeeProcessDetailPage = () => {
                         ))}
                     </div>
                 </div>
+            )}
+
+            {/* Modals */}
+            {showCreateOutputModal && (
+                <CreateOutputProductModal
+                    process={process}
+                    onClose={() => setShowCreateOutputModal(false)}
+                    onSuccess={() => {
+                        setShowCreateOutputModal(false);
+                        fetchProcessDetails();
+                    }}
+                />
+            )}
+
+            {showAddInputModal && (
+                <AddInputModal
+                    processId={id}
+                    onClose={() => setShowAddInputModal(false)}
+                    onSuccess={() => {
+                        setShowAddInputModal(false);
+                        fetchProcessDetails();
+                        fetchMaterials();
+                    }}
+                />
             )}
         </div>
     );
