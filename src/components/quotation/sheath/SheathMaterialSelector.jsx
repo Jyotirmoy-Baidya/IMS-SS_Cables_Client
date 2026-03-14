@@ -37,7 +37,7 @@ const SheathMaterialSelector = ({ sheath, onUpdate }) => {
         const fetchSheathTypes = async () => {
             try {
                 setLoading(true);
-                const response = await api.get('/material-type/get-all-material-types?category=plastic,insulation');
+                const response = await api.get('/material-type/get-all-material-types?category=plastic,insulation,alloy');
                 setSheathTypes(response.data || []);
             } catch (error) {
                 console.error('Error fetching sheath types:', error);

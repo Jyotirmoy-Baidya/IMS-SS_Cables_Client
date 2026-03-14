@@ -12,7 +12,7 @@ const UserModal = ({ user, onClose, onSave }) => {
     const [formData, setFormData] = useState({
         name: '',
         role: 'employee',
-        phoneNumbers: [{ number: '', label: 'Primary', isPrimary: true }],
+        phoneNumber: '',
         address: {
             line1: '',
             line2: '',
@@ -50,9 +50,7 @@ const UserModal = ({ user, onClose, onSave }) => {
             setFormData({
                 name: user.name || '',
                 role: user.role || 'employee',
-                phoneNumbers: user.phoneNumbers?.length > 0
-                    ? user.phoneNumbers
-                    : [{ number: '', label: 'Primary', isPrimary: true }],
+                phoneNumber: user.phoneNumber,
                 address: user.address || {
                     line1: '',
                     line2: '',
@@ -67,6 +65,8 @@ const UserModal = ({ user, onClose, onSave }) => {
         }
     }, [user]);
 
+    console.log(formData);
+
     const handleInputChange = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
@@ -78,39 +78,8 @@ const UserModal = ({ user, onClose, onSave }) => {
         }));
     };
 
-    const handlePhoneChange = (index, field, value) => {
-        const updatedPhones = [...formData.phoneNumbers];
-        updatedPhones[index][field] = value;
 
-        // If setting as primary, unset others
-        if (field === 'isPrimary' && value === true) {
-            updatedPhones.forEach((p, i) => {
-                if (i !== index) p.isPrimary = false;
-            });
-        }
 
-        setFormData(prev => ({ ...prev, phoneNumbers: updatedPhones }));
-    };
-
-    const handleAddPhone = () => {
-        setFormData(prev => ({
-            ...prev,
-            phoneNumbers: [...prev.phoneNumbers, { number: '', label: '', isPrimary: false }],
-        }));
-    };
-
-    const handleRemovePhone = (index) => {
-        if (formData.phoneNumbers.length === 1) {
-            alert('At least one phone number is required');
-            return;
-        }
-        const updatedPhones = formData.phoneNumbers.filter((_, i) => i !== index);
-        // If removed phone was primary, make first one primary
-        if (!updatedPhones.some(p => p.isPrimary)) {
-            updatedPhones[0].isPrimary = true;
-        }
-        setFormData(prev => ({ ...prev, phoneNumbers: updatedPhones }));
-    };
 
     const handleProcessToggle = (processId) => {
         setFormData(prev => ({
@@ -191,55 +160,11 @@ const UserModal = ({ user, onClose, onSave }) => {
                         <div className="flex items-center justify-between mb-2">
                             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
                                 <Phone size={11} />
-                                Phone Numbers *
+                                Phone Numbers
                             </label>
-                            <button
-                                type="button"
-                                onClick={handleAddPhone}
-                                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg"
-                            >
-                                <Plus size={12} /> Add Phone
-                            </button>
+                            <span>{formData.phoneNumber}</span>
                         </div>
-                        <div className="space-y-2">
-                            {formData.phoneNumbers.map((phone, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
-                                    <input
-                                        type="tel"
-                                        required
-                                        value={phone.number}
-                                        onChange={e => handlePhoneChange(idx, 'number', e.target.value)}
-                                        placeholder="Phone number"
-                                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                    />
-                                    <input
-                                        type="text"
-                                        value={phone.label}
-                                        onChange={e => handlePhoneChange(idx, 'label', e.target.value)}
-                                        placeholder="Label (optional)"
-                                        className="w-32 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                    />
-                                    <label className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
-                                        <input
-                                            type="checkbox"
-                                            checked={phone.isPrimary}
-                                            onChange={e => handlePhoneChange(idx, 'isPrimary', e.target.checked)}
-                                            className="w-4 h-4 rounded"
-                                        />
-                                        Primary
-                                    </label>
-                                    {formData.phoneNumbers.length > 1 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemovePhone(idx)}
-                                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+
                     </div>
 
                     {/* Address */}
@@ -323,9 +248,8 @@ const UserModal = ({ user, onClose, onSave }) => {
                                                         <tr
                                                             key={process._id}
                                                             onClick={() => handleProcessToggle(process._id)}
-                                                            className={`cursor-pointer transition-colors ${
-                                                                isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                                                            }`}
+                                                            className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                                                                }`}
                                                         >
                                                             <td className="py-2.5 px-2">
                                                                 <input

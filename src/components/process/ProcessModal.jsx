@@ -17,7 +17,7 @@ const SOURCE_OPTIONS = [
 
     // Core conductor variables
     { value: 'coreMaterialDensity', label: 'Core Material Density (g/cm³) — from specific core' },
-    { value: 'coreTotalCoreArea', label: 'Core Total Area (mm²) — from specific core' },
+    { value: 'areaPerWire', label: 'Area Of Each Wire In Core — from specific core' },
     { value: 'coreWireCount', label: 'Core Wire Count — from specific core' },
     { value: 'coreWastagePercent', label: 'Core Wastage % — from specific core' },
     { value: 'coreHasAnnealing', label: 'Core Has Annealing (0/1) — from specific core' },
@@ -49,10 +49,10 @@ const SOURCE_OPTIONS = [
 ];
 
 const CATEGORY_OPTIONS = [
-    { value: 'conductor',  label: 'Conductor' },
+    { value: 'conductor', label: 'Conductor' },
     { value: 'insulation', label: 'Insulation' },
-    { value: 'sheathing',  label: 'Sheathing' },
-    { value: 'general',    label: 'General' },
+    { value: 'sheathing', label: 'Sheathing' },
+    { value: 'general', label: 'General' },
 ];
 
 const EMPTY_VARIABLE = { name: '', label: '', unit: '', source: 'manual', defaultValue: 0 };
@@ -89,12 +89,12 @@ const ProcessModal = ({ open, onClose, onSuccess, process: editProcess }) => {
     useEffect(() => {
         if (editProcess) {
             setForm({
-                name:        editProcess.name || '',
+                name: editProcess.name || '',
                 description: editProcess.description || '',
-                category:    editProcess.category || 'general',
-                formula:     editProcess.formula || '',
+                category: editProcess.category || 'general',
+                formula: editProcess.formula || '',
                 formulaNote: editProcess.formulaNote || '',
-                variables:   editProcess.variables ? editProcess.variables.map(v => ({ ...v })) : [],
+                variables: editProcess.variables ? editProcess.variables.map(v => ({ ...v })) : [],
                 output: editProcess.output ? {
                     outputType: editProcess.output.outputType || 'none',
                     quantityFormula: editProcess.output.quantityFormula || '',
@@ -108,7 +108,7 @@ const ProcessModal = ({ open, onClose, onSuccess, process: editProcess }) => {
                     specificationTemplate: '',
                     unit: 'm'
                 },
-                isActive:    editProcess.isActive !== false
+                isActive: editProcess.isActive !== false
             });
         } else {
             setForm({

@@ -6,8 +6,7 @@ const CreateOutputProductModal = ({ process, onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
         itemName: '',
         specifications: '',
-        storageLocation: '',
-        quantity: 0
+        storageLocation: ''
     });
     const [submitting, setSubmitting] = useState(false);
 
@@ -16,10 +15,8 @@ const CreateOutputProductModal = ({ process, onClose, onSuccess }) => {
             setFormData({
                 itemName: process.output?.calculatedItemName || '',
                 specifications: process.output?.calculatedSpecification || '',
-                storageLocation: '',
-                quantity: process.output?.calculatedQuantity || 0
+                storageLocation: ''
             });
-
         }
     }, [process]);
 
@@ -38,7 +35,7 @@ const CreateOutputProductModal = ({ process, onClose, onSuccess }) => {
 
         try {
             setSubmitting(true);
-            await api.post(`/process-in-work-order/${process._id}/create-output-product`, formData);
+            await api.post(`/employee/create-output-product/${process._id}`, formData);
             alert(`${process.output?.outputType === 'intermediate' ? 'WIP Inventory' : 'Finished Good'} created successfully!`);
             if (onSuccess) onSuccess();
         } catch (err) {
@@ -115,23 +112,17 @@ const CreateOutputProductModal = ({ process, onClose, onSuccess }) => {
                         />
                     </div>
 
-                    {/* Initial Quantity */}
-                    <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Initial Quantity ({process.output?.unit || 'm'})
-                        </label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            value={formData.quantity}
-                            onChange={e => setFormData(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-                            placeholder="0.00"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-200 focus:border-green-500"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                            Expected: {process.output?.calculatedQuantity || 0} {process.output?.unit || 'm'}
-                        </p>
-                    </div>
+                    {/* Expected Quantity Display */}
+                    {process.output?.calculatedQuantity && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <p className="text-sm text-gray-700">
+                                <strong>Expected Quantity:</strong> {process.output.calculatedQuantity} {process.output.unit || 'm'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Quantity will be updated as you report progress
+                            </p>
+                        </div>
+                    )}
 
                     {/* Storage Location */}
                     <div>

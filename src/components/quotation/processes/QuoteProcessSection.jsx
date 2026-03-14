@@ -14,7 +14,6 @@ const SOURCE_LABELS = {
 
     // Core conductor
     coreMaterialDensity: 'Core Material Density (g/cm³)',
-    coreTotalCoreArea: 'Core Total Area (mm²)',
     coreWireCount: 'Core Wire Count',
     coreWastagePercent: 'Core Wastage %',
     coreHasAnnealing: 'Core Has Annealing',
@@ -75,20 +74,20 @@ const QuoteProcessSection = ({
         const variables = (master.variables || []).map(v => {
             const autoValue = v.source !== 'manual' ? (quoteContext[v.source] || 0) : null;
             return {
-                name:         v.name,
-                label:        v.label,
-                unit:         v.unit,
-                source:       v.source,
+                name: v.name,
+                label: v.label,
+                unit: v.unit,
+                source: v.source,
                 defaultValue: v.defaultValue,
-                value:        autoValue !== null ? autoValue : (v.defaultValue || 0)
+                value: autoValue !== null ? autoValue : (v.defaultValue || 0)
             };
         });
         return {
-            id:          Date.now() + Math.random(),
-            processId:   master._id,
+            id: Date.now() + Math.random(),
+            processId: master._id,
             processName: master.name,
-            category:    master.category,
-            formula:     master.formula,
+            category: master.category,
+            formula: master.formula,
             formulaNote: master.formulaNote,
             variables
         };
@@ -233,11 +232,10 @@ const QuoteProcessSection = ({
                                                             value={v.value}
                                                             readOnly={v.source !== 'manual'}
                                                             onChange={e => onUpdateVariable(entry.id, v.name, parseFloat(e.target.value) || 0)}
-                                                            className={`w-24 px-2 py-1 border rounded text-xs text-right ${
-                                                                v.source !== 'manual'
-                                                                    ? 'bg-blue-50 border-blue-200 text-blue-700 cursor-not-allowed'
-                                                                    : 'bg-white'
-                                                            }`}
+                                                            className={`w-24 px-2 py-1 border rounded text-xs text-right ${v.source !== 'manual'
+                                                                ? 'bg-blue-50 border-blue-200 text-blue-700 cursor-not-allowed'
+                                                                : 'bg-white'
+                                                                }`}
                                                         />
                                                     </div>
                                                 ))}

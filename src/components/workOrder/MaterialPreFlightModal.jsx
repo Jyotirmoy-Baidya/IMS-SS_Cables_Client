@@ -14,6 +14,27 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Merge material requirements by materialId + type (composite key) and sum quantities
+    const mergeMaterialRequirements = (requirements) => {
+        const merged = {};
+
+        requirements.forEach(req => {
+            // Create composite key using both materialId and type for uniqueness
+            const key = `${req.materialId}_${req.type || 'raw-material'}`;
+
+            if (merged[key]) {
+                // If material with same ID and type already exists, add to the quantity
+                merged[key].requiredWeight += req.requiredWeight;
+            } else {
+                // Create new entry
+                merged[key] = { ...req };
+            }
+        });
+
+        // Convert back to array
+        return Object.values(merged);
+    };
+
     const checkMaterialAvailability = async () => {
         try {
             setChecking(true);
@@ -28,18 +49,59 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
                 return;
             }
 
+
+
+            // Keep original requirements for process info
+            const requirementsWithProcessInfo = requirements.reduce((acc, req) => {
+                const key = `${req.materialId}_${req.type || 'raw-material'}`;
+                if (!acc[key]) {
+                    acc[key] = {
+                        materialId: req.materialId,
+                        materialName: req.materialName,
+                        type: req.type,
+                        category: req.category,
+                        processes: []
+                    };
+                }
+                // Add process/context info
+                if (req.context) {
+                    acc[key].processes.push({
+                        type: req.context.type,
+                        label: req.context.label,
+                        purpose: req.purpose,
+                        weight: req.weight
+                    });
+                }
+                return acc;
+            }, {});
+
+            // Merge duplicate material IDs and sum their quantities
+            const mergedRequirements = mergeMaterialRequirements(requirements);
+
             // Transform requirements to API format
-            const materialRequirements = requirements.map(req => ({
+            const materialRequirements = mergedRequirements.map(req => ({
                 materialId: req.materialId,
                 requiredWeight: req.weight
             }));
-            console.log(materialRequirements);
+
             // Check availability for these materials
             const availRes = await api.post('/material-allocation/check-availability', {
                 materialRequirements
             });
 
-            console.log("avaiablility", availRes);
+            // Attach process info to availability data
+            if (availRes?.data?.materialTypes) {
+                availRes.data.materialTypes = availRes.data.materialTypes.map(mat => {
+                    const key = `${mat.materialId}_${mat.type || 'raw-material'}`;
+                    const processInfo = requirementsWithProcessInfo[key];
+                    return {
+                        ...mat,
+                        processes: processInfo?.processes || []
+                    };
+                });
+            }
+
+            console.log('Availability with processes:', availRes);
 
             setAvailability(availRes);
         } catch (err) {
@@ -99,6 +161,7 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
 
     const allSufficient = availability?.data?.allSufficient;
     const materials = availability?.data?.materialTypes || [];
+    console.log(materials)
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -149,6 +212,7 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
                             <tr>
                                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Material</th>
                                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Category</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Used In Processes</th>
                                 <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Required</th>
                                 <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Available</th>
                                 <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Allocated</th>
@@ -159,7 +223,7 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
                         <tbody className="divide-y divide-gray-100">
                             {materials.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="px-6 py-8 text-center text-gray-400">
+                                    <td colSpan="8" className="px-6 py-8 text-center text-gray-400">
                                         No materials required for this work order
                                     </td>
                                 </tr>
@@ -175,6 +239,11 @@ const MaterialPreFlightModal = ({ quotation, onClose, onProceed }) => {
                                         <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded capitalize">
                                             {mat.category}
                                         </span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="space-y-1">
+                                            {mat.type}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-3 text-right font-semibold text-blue-700">
                                         {mat.requiredWeight?.toFixed(2) || '0.00'} kg
